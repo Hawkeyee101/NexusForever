@@ -13,14 +13,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Script
     [ScriptFilterOwnerId(TheHycrestInsurrectionEventScript.VoteRetestTriggerId)]
     public class VoteRetestGridTriggerEntityScript : IGridEntityScript, IOwnedScript<IGridTriggerEntity>
     {
+        // the first range check after the trigger is added reports players already inside; only re-entries count
+        private static readonly TimeSpan IgnoreInitialRange = TimeSpan.FromSeconds(2);
+
         private IGridTriggerEntity trigger;
+        private DateTime loadTime;
 
         /// <summary>
         /// Invoked when <see cref="IScript"/> is loaded.
         /// </summary>
         public void OnLoad(IGridTriggerEntity owner)
         {
-            trigger = owner;
+            trigger  = owner;
+            loadTime = DateTime.UtcNow;
         }
 
         /// <summary>
@@ -29,6 +34,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Script
         public void OnEnterRange(IGridEntity entity)
         {
             if (entity is not IPlayer)
+                return;
+
+            if (DateTime.UtcNow - loadTime < IgnoreInitialRange)
                 return;
 
             IPublicEvent publicEvent = trigger.Map.PublicEventManager.GetEvent(HycrestPublicEvent.Main);

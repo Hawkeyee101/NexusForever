@@ -48,6 +48,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly TimedActionQueue actionQueue = new();
         private IVolumeGridTriggerEntity barnTrigger;
         private bool meetVesnaActive;
+        private bool barnArrivalSent;
 
         private HycrestDropShip dropShip;
         private UpdateTimer shipDepartTimer;
@@ -95,6 +96,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             actionQueue.Update(lastTick);
             dropShip.Update(lastTick);
             UpdateShipDeparture(lastTick);
+            UpdateBarnArrival();
 
             if (briefingTimer == null)
                 return;
@@ -206,6 +208,23 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 actionQueue.Enqueue(delay, () => dialogue.Say(mapInstance.GetEntity<IWorldEntity>(dawsonGuid), textId, gesture: false));
         }
 
+        private void UpdateBarnArrival()
+        {
+            if (!meetVesnaActive || barnArrivalSent)
+                return;
+
+            // the first player inside the barn trigger raises the count of 189; the main event plays Ayita's first line
+            IPublicEventObjective objective = publicEvent.GetTeams()
+                .SelectMany(t => t.GetObjectives())
+                .FirstOrDefault(o => o.Entry.Id == (uint)PublicEventObjective.MeetVesnaTaranoft);
+            if (objective == null || objective.Count == 0)
+                return;
+
+            barnArrivalSent = true;
+            mapInstance.PublicEventManager.GetEvent(HycrestPublicEvent.Main)?
+                .InvokeScriptCollection<TheHycrestInsurrectionEventScript>(s => s.OnFirstBarnArrival());
+        }
+
         private void UpdateShipDeparture(double lastTick)
         {
             if (!dropShip.DoorsOpen || dropShip.Departed)
@@ -244,6 +263,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             log.LogInformation($"Hycrest: intro {HycrestPublicEvent.Intro} completed.");
 
             IPublicEvent mainEvent = mapInstance.PublicEventManager.GetEvent(HycrestPublicEvent.Main);
+
+            // the last player to arrive can complete 189 before the per-tick arrival check ran (always the case solo)
+            if (!barnArrivalSent)
+            {
+                barnArrivalSent = true;
+                mainEvent?.InvokeScriptCollection<TheHycrestInsurrectionEventScript>(s => s.OnFirstBarnArrival());
+            }
+
             mainEvent?.InvokeScriptCollection<TheHycrestInsurrectionEventScript>(s => s.OnIntroComplete());
         }
     }
