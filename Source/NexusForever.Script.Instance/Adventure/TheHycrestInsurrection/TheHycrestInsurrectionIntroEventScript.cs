@@ -1,5 +1,6 @@
 using System.Numerics;
 using Microsoft.Extensions.Logging;
+using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.PublicEvent;
@@ -30,6 +31,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private UpdateTimer briefingTimer;
         private IVolumeGridTriggerEntity barnTrigger;
+        private bool meetVesnaActive;
 
         #region Dependency Injection
 
@@ -75,6 +77,40 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
+        /// Invoked when a <see cref="IGridEntity"/> is added to the map the public event is on.
+        /// </summary>
+        public void OnAddToMap(IGridEntity entity)
+        {
+            if (entity is IPlayer player && meetVesnaActive)
+                publicEvent.SetObjectiveDynamicMax(PublicEventObjective.MeetVesnaTaranoft, GetPartySize(joining: player));
+        }
+
+        /// <summary>
+        /// Invoked when a <see cref="IGridEntity"/> is removed from the map the public event is on.
+        /// </summary>
+        public void OnRemoveFromMap(IGridEntity entity)
+        {
+            if (entity is IPlayer && meetVesnaActive)
+                publicEvent.SetObjectiveDynamicMax(PublicEventObjective.MeetVesnaTaranoft, GetPartySize());
+        }
+
+        /// <summary>
+        /// Return the number of players in the instance.
+        /// </summary>
+        /// <remarks>
+        /// Add and remove callbacks run while the player isn't in the map's player list: added after the callbacks,
+        /// removed before them. A joining player is counted explicitly.
+        /// </remarks>
+        private uint GetPartySize(IPlayer joining = null)
+        {
+            uint count = (uint)mapInstance.GetPlayers().Count(p => p != joining);
+            if (joining != null)
+                count++;
+
+            return Math.Max(count, 1u);
+        }
+
+        /// <summary>
         /// Invoked when the <see cref="IPublicEventObjective"/> status changes.
         /// </summary>
         public void OnPublicEventObjectiveStatus(IPublicEventObjective objective)
@@ -110,7 +146,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void StartMeetVesna()
         {
-            publicEvent.ActivateObjective(PublicEventObjective.MeetVesnaTaranoft);
+            // every player in the instance has to gather in the barn, the client shows "Waiting for N more" from the max
+            meetVesnaActive = true;
+            publicEvent.ActivateObjective(PublicEventObjective.MeetVesnaTaranoft, GetPartySize());
 
             barnTrigger = publicEvent.CreateEntity<IVolumeGridTriggerEntity>();
             barnTrigger.Initialise(BarnTriggerId, BarnTriggerRange, BarnTriggerObjectId);
@@ -119,6 +157,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void FinishIntro()
         {
+            meetVesnaActive = false;
+
             // remove the trigger so it can't update other objectives with the same object id later ("Return to the Barn" in The Great Escape)
             if (barnTrigger?.InWorld == true)
                 barnTrigger.RemoveFromMap();
