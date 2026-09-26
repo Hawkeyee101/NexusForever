@@ -33,6 +33,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private IVolumeGridTriggerEntity barnTrigger;
         private bool meetVesnaActive;
 
+        private uint shipGuid;
+        private readonly List<uint> shipDoorGuids = [];
+        private uint dawsonGuid;
+
         #region Dependency Injection
 
         private readonly ILogger<TheHycrestInsurrectionIntroEventScript> log;
@@ -81,8 +85,35 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public void OnAddToMap(IGridEntity entity)
         {
-            if (entity is IPlayer player && meetVesnaActive)
-                publicEvent.SetObjectiveDynamicMax(PublicEventObjective.MeetVesnaTaranoft, GetPartySize(joining: player));
+            switch (entity)
+            {
+                case IPlayer player:
+                {
+                    if (meetVesnaActive)
+                        publicEvent.SetObjectiveDynamicMax(PublicEventObjective.MeetVesnaTaranoft, GetPartySize(joining: player));
+                    break;
+                }
+                case IWorldEntity worldEntity:
+                    OnAddToMapWorldEntity(worldEntity);
+                    break;
+            }
+        }
+
+        private void OnAddToMapWorldEntity(IWorldEntity worldEntity)
+        {
+            switch ((PublicEventCreature)worldEntity.CreatureId)
+            {
+                case PublicEventCreature.DominionDropship:
+                    shipGuid = worldEntity.Guid;
+                    break;
+                case PublicEventCreature.DropshipDoorRight:
+                case PublicEventCreature.DropshipDoorLeft:
+                    shipDoorGuids.Add(worldEntity.Guid);
+                    break;
+                case PublicEventCreature.ViceMarshalDawson:
+                    dawsonGuid = worldEntity.Guid;
+                    break;
+            }
         }
 
         /// <summary>
