@@ -4,10 +4,12 @@ using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.PublicEvent;
+using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter;
+using NexusForever.Shared;
 using NexusForever.Shared.Game;
 
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
@@ -35,6 +37,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             (TimeSpan.FromSeconds(13.5), 455316u) // "Your suits are equipped with a slow burn jetpack..."
         ];
 
+        // the ship leaves once every player has jumped; this is the latest it waits after the doors open
+        // (189 starts right after the briefing, so leaving "when 189 starts" would push everyone off at once)
+        private static readonly TimeSpan ShipDepartDeadline = TimeSpan.FromSeconds(30);
+
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
 
@@ -43,20 +49,23 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private IVolumeGridTriggerEntity barnTrigger;
         private bool meetVesnaActive;
 
-        private uint shipGuid;
-        private readonly List<uint> shipDoorGuids = [];
+        private HycrestDropShip dropShip;
+        private UpdateTimer shipDepartTimer;
         private uint dawsonGuid;
 
         #region Dependency Injection
 
         private readonly ILogger<TheHycrestInsurrectionIntroEventScript> log;
         private readonly HycrestDialogue dialogue;
+        private readonly IFactory<ISpellParameters> spellParametersFactory;
 
         public TheHycrestInsurrectionIntroEventScript(
             ILogger<TheHycrestInsurrectionIntroEventScript> log,
-            IGameTableManager gameTableManager)
+            IGameTableManager gameTableManager,
+            IFactory<ISpellParameters> spellParametersFactory)
         {
-            this.log = log;
+            this.log                    = log;
+            this.spellParametersFactory = spellParametersFactory;
             dialogue = new HycrestDialogue(gameTableManager);
         }
 
@@ -69,6 +78,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             publicEvent = owner;
             mapInstance = publicEvent.Map as IMapInstance;
+            dropShip    = new HycrestDropShip(mapInstance, spellParametersFactory, log, actionQueue);
 
             // spawns Vice-Marshal Dawson, objective 2113 is initial and completed by talking to him
             publicEvent.SetPhase(0u);
@@ -83,6 +93,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public void Update(double lastTick)
         {
             actionQueue.Update(lastTick);
+            dropShip.Update(lastTick);
+            UpdateShipDeparture(lastTick);
 
             if (briefingTimer == null)
                 return;
@@ -119,14 +131,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             switch ((PublicEventCreature)worldEntity.CreatureId)
             {
                 case PublicEventCreature.DominionDropship:
-                    shipGuid = worldEntity.Guid;
+                    dropShip.ShipGuid = worldEntity.Guid;
                     break;
                 case PublicEventCreature.DropshipDoorRight:
                 case PublicEventCreature.DropshipDoorLeft:
-                    shipDoorGuids.Add(worldEntity.Guid);
+                    dropShip.DoorGuids.Add(worldEntity.Guid);
                     break;
                 case PublicEventCreature.ViceMarshalDawson:
-                    dawsonGuid = worldEntity.Guid;
+                    dawsonGuid          = worldEntity.Guid;
+                    dropShip.DawsonGuid = worldEntity.Guid;
                     break;
             }
         }
@@ -193,8 +206,22 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 actionQueue.Enqueue(delay, () => dialogue.Say(mapInstance.GetEntity<IWorldEntity>(dawsonGuid), textId, gesture: false));
         }
 
+        private void UpdateShipDeparture(double lastTick)
+        {
+            if (!dropShip.DoorsOpen || dropShip.Departed)
+                return;
+
+            shipDepartTimer?.Update(lastTick);
+            if (dropShip.EveryoneOff() || shipDepartTimer?.HasElapsed == true)
+                dropShip.Depart();
+        }
+
         private void StartMeetVesna()
         {
+            // the briefing is over: open the doors, players jump out themselves with the slow-burn jetpack
+            dropShip.OpenDoors();
+            shipDepartTimer = new UpdateTimer(ShipDepartDeadline);
+
             // every player in the instance has to gather in the barn, the client shows "Waiting for N more" from the max
             meetVesnaActive = true;
             publicEvent.ActivateObjective(PublicEventObjective.MeetVesnaTaranoft, GetPartySize());
