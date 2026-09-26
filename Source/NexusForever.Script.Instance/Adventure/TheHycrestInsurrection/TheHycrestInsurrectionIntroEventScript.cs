@@ -5,6 +5,7 @@ using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.PublicEvent;
 using NexusForever.Game.Static.PublicEvent;
+using NexusForever.GameTable;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter;
 using NexusForever.Shared.Game;
@@ -26,10 +27,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // objective 2155 is a TimedWin, the script completes it just before the engine failure timer (FailureTimeMs) would fail it
         private static readonly TimeSpan BriefingMargin = TimeSpan.FromMilliseconds(500);
 
+        // Vice-Marshal Dawson's briefing, spoken to the whole ship during the 20 s objective 2155
+        private static readonly (TimeSpan Delay, uint TextId)[] DawsonBriefing =
+        [
+            (TimeSpan.FromSeconds(0.5), 162291u), // "You are here to assist Agent Vesna Taranoft..."
+            (TimeSpan.FromSeconds(7),   162292u), // "Use your best judgment out there..."
+            (TimeSpan.FromSeconds(13.5), 455316u) // "Your suits are equipped with a slow burn jetpack..."
+        ];
+
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
 
         private UpdateTimer briefingTimer;
+        private readonly TimedActionQueue actionQueue = new();
         private IVolumeGridTriggerEntity barnTrigger;
         private bool meetVesnaActive;
 
@@ -40,11 +50,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         #region Dependency Injection
 
         private readonly ILogger<TheHycrestInsurrectionIntroEventScript> log;
+        private readonly HycrestDialogue dialogue;
 
         public TheHycrestInsurrectionIntroEventScript(
-            ILogger<TheHycrestInsurrectionIntroEventScript> log)
+            ILogger<TheHycrestInsurrectionIntroEventScript> log,
+            IGameTableManager gameTableManager)
         {
             this.log = log;
+            dialogue = new HycrestDialogue(gameTableManager);
         }
 
         #endregion
@@ -69,6 +82,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </remarks>
         public void Update(double lastTick)
         {
+            actionQueue.Update(lastTick);
+
             if (briefingTimer == null)
                 return;
 
@@ -173,6 +188,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             TimeSpan duration = TimeSpan.FromMilliseconds(objective?.Entry.FailureTimeMs ?? 20000u) - BriefingMargin;
             briefingTimer = new UpdateTimer(duration);
+
+            foreach ((TimeSpan delay, uint textId) in DawsonBriefing)
+                actionQueue.Enqueue(delay, () => dialogue.Say(mapInstance.GetEntity<IWorldEntity>(dawsonGuid), textId, gesture: false));
         }
 
         private void StartMeetVesna()
