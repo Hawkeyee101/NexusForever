@@ -7,11 +7,11 @@ using NexusForever.Script.Template.Filter;
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Script
 {
     /// <summary>
-    /// Test trigger in the Abandoned Orchards, entering it starts the first mission vote.
-    /// TODO: test-only, the real vote start is completing intro event 418 (see TheHycrestInsurrectionEventScript).
+    /// Development aid in the Abandoned Barn: after the intro, entering it again restarts the mission vote.
+    /// Only created when <see cref="TheHycrestInsurrectionEventScript.AllowVoteRetest"/> is set.
     /// </summary>
-    [ScriptFilterOwnerId(TheHycrestInsurrectionEventScript.VoteTestTriggerId)]
-    public class VoteTestGridTriggerEntityScript : IGridEntityScript, IOwnedScript<IGridTriggerEntity>
+    [ScriptFilterOwnerId(TheHycrestInsurrectionEventScript.VoteRetestTriggerId)]
+    public class VoteRetestGridTriggerEntityScript : IGridEntityScript, IOwnedScript<IGridTriggerEntity>
     {
         private IGridTriggerEntity trigger;
 
@@ -31,7 +31,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Script
             if (entity is not IPlayer)
                 return;
 
-            IPublicEvent publicEvent = trigger.Map.PublicEventManager.GetEvent(TheHycrestInsurrectionEventScript.PublicEventId);
+            IPublicEvent publicEvent = trigger.Map.PublicEventManager.GetEvent(HycrestPublicEvent.Main);
             publicEvent?.InvokeScriptCollection<TheHycrestInsurrectionEventScript>(s => s.StartMissionVote());
         }
     }

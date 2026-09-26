@@ -36,8 +36,20 @@ namespace NexusForever.Game.PublicEvent
             Status = entry.PublicEventObjectiveFlags.HasFlag(PublicEventObjectiveFlag.InitialObjective)
                 ? PublicEventStatus.Active : PublicEventStatus.Inactive;
 
-            if (entry.FailureTimeMs > 0)
-                failureTimer = new UpdateTimer(TimeSpan.FromMilliseconds(entry.FailureTimeMs));
+            if (Status == PublicEventStatus.Active)
+                StartTimers();
+        }
+
+        /// <summary>
+        /// Start the elapsed and failure timers, invoked when the objective becomes active.
+        /// </summary>
+        /// <remarks>
+        /// Timers must not run while the objective is inactive, otherwise objectives activated later in the event fail early.
+        /// </remarks>
+        private void StartTimers()
+        {
+            elapsedTimer = 0d;
+            failureTimer = Entry.FailureTimeMs > 0 ? new UpdateTimer(TimeSpan.FromMilliseconds(Entry.FailureTimeMs)) : null;
         }
 
         /// <summary>
@@ -46,6 +58,9 @@ namespace NexusForever.Game.PublicEvent
         public void Update(double lastTick)
         {
             if (IsBusy)
+                return;
+
+            if (Status != PublicEventStatus.Active)
                 return;
 
             elapsedTimer += lastTick;
@@ -64,6 +79,12 @@ namespace NexusForever.Game.PublicEvent
         private void SetStatus(PublicEventStatus status)
         {
             Status = status;
+
+            if (status == PublicEventStatus.Active)
+                StartTimers();
+            else
+                failureTimer = null;
+
             BroadcastObjectiveStatusUpdate();
 
             Team.PublicEvent.InvokeScriptCollection<IPublicEventScript>(s => s.OnPublicEventObjectiveStatus(this));
