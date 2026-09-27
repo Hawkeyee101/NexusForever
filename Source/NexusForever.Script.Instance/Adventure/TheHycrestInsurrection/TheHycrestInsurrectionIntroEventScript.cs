@@ -46,8 +46,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // arriving players are put on the ship's deck shortly after entering the map
         private static readonly TimeSpan BoardDelay = TimeSpan.FromSeconds(0.5);
 
-        // arrival, timed from the moment a player's client has finished loading: a black screen (the arrival cinematic,
-        // 20 s) covers the ship flying in and the boarding teleport; then the green "synchronisation" glow, the Caretaker's
+        // the black screen starts once the player stands on the deck: the client doesn't move the player during a
+        // cinematic, a boarding teleport under the black screen left them dropping onto the deck as it ended (27 Sep 2026)
+        private static readonly TimeSpan ArrivalAfterBoard = TimeSpan.FromSeconds(0.5);
+
+        // arrival, timed from the moment a player stands on the deck: a black screen (the arrival cinematic, 20 s); then the green "synchronisation" glow, the Caretaker's
         // narration as portrait pop-ups (10 s each) while the hologram talks, then Dawson comes out of the door where the hologram was
         private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(20);
         private static readonly TimeSpan SyncDelay          = BlackScreen;
@@ -120,8 +123,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             publicEvent = owner;
             mapInstance = publicEvent.Map as IMapInstance;
             dropShip    = new HycrestDropShip(mapInstance, spellParametersFactory, log, actionQueue);
-            dropShip.BoardWithLoadingScreen = false; // the black screen hides it
-            dropShip.PlayerLoaded += OnPlayerLoaded;
+            dropShip.BoardWithLoadingScreen = false;
+            dropShip.PlayerBoarded += OnPlayerBoarded;
 
             // spawns Vice-Marshal Dawson, objective 2113 is initial and completed by talking to him
             publicEvent.SetPhase(0u);
@@ -170,11 +173,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     dropShip.ShipGuid = worldEntity.Guid;
                     break;
                 case PublicEventCreature.DominionDropship:
-                    // hovering, engines running; flies in from its start point before anyone is on board (the doors and
-                    // the hologram, spawned in the same batch, are registered by then)
+                    // hovering, engines running; moved from its start point to the hover point before anyone is on board
+                    // (the doors and the hologram, spawned in the same batch, are registered by then). Placed there at once:
+                    // the fly-in (FlyIn) would happen before the players have loaded, so nobody would see it
                     dropShip.ShipGuid = worldEntity.Guid;
                     HycrestDropShip.SetState(worldEntity, StandState.State1);
-                    actionQueue.Enqueue(TimeSpan.FromSeconds(0.5), dropShip.FlyIn);
+                    actionQueue.Enqueue(TimeSpan.FromSeconds(0.5), dropShip.PlaceAtHover);
                     break;
                 case PublicEventCreature.DropshipDoorRight:
                     dropShip.RightDoorGuid = worldEntity.Guid;
@@ -262,7 +266,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             });
         }
 
-        private void OnPlayerLoaded(IPlayer player)
+        private void OnPlayerBoarded(IPlayer player)
+        {
+            uint guid = player.Guid;
+            actionQueue.Enqueue(ArrivalAfterBoard, () => WithPlayer(guid, StartArrival));
+        }
+
+        private void StartArrival(IPlayer player)
         {
             uint guid = player.Guid;
 

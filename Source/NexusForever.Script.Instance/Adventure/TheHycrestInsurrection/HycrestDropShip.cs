@@ -183,6 +183,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
+        /// Put the ship, the doors and the hologram at the hover point at once, instead of <see cref="FlyIn"/>: for an
+        /// arrival where nobody would see the fly-in.
+        /// </summary>
+        public void PlaceAtHover()
+        {
+            if (FlewIn || Departed)
+                return;
+
+            FlewIn  = true;
+            Arrived = true;
+
+            IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
+            if (ship == null)
+                return;
+
+            Vector3 delta = HycrestShipLayout.Origin - ship.Position;
+            foreach (uint guid in new[] { ShipGuid, RightDoorGuid, LeftDoorGuid, HologramGuid })
+            {
+                IWorldEntity entity = map.GetEntity<IWorldEntity>(guid);
+                entity?.MovementManager.SetPosition(entity.Position + delta, false);
+            }
+
+            log.LogInformation("Hycrest: drop ship placed at its hover point.");
+        }
+
+        /// <summary>
         /// Fly the ship from its start point to its hover point, before anyone is on board (see <see cref="Arrived"/>).
         /// The doors and the hologram aren't attached to it, so they fly the same path at the same speed.
         /// </summary>
