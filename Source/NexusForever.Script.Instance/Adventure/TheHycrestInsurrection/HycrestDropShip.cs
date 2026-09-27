@@ -24,6 +24,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private class PlayerDrop
         {
             public DropState State;
+            public Vector3 Spot;
+            public bool Boarded;
             public bool OnPlatformConfirmed;
             public bool ReachedDeck;
             public double SinceCast;
@@ -54,7 +56,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly ILogger log;
         private readonly TimedActionQueue actionQueue;
 
-        private readonly Dictionary<uint, PlayerDrop> players = [];
+        // keyed by character id: a teleport within the map removes and re-adds the player, possibly with a new guid
+        private readonly Dictionary<ulong, PlayerDrop> players = [];
         private int nextSpot;
 
         public uint ShipGuid { get; set; }
@@ -73,25 +76,25 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Put <paramref name="player"/> on the ship's deck, unless the ship has already left.
+        /// Put <paramref name="player"/> on the ship's deck, unless the ship has already left or the player has boarded before.
         /// </summary>
         /// <remarks>
         /// The group finder entrance has to be a WorldLocation2 point and there is none on the moved ship, so arriving
-        /// players are teleported onto the deck.
+        /// players are teleported onto the deck. The teleport waits until the client has finished loading the map,
+        /// a local teleport is refused while the map transfer is still pending.
         /// </remarks>
         public void Board(IPlayer player)
         {
-            if (Departed)
+            if (Departed || players.ContainsKey(player.CharacterId))
                 return;
 
             Vector3 spot = HycrestShipLayout.PlayerSpots[nextSpot++ % HycrestShipLayout.PlayerSpots.Length];
-            players[player.Guid] = new PlayerDrop
+            players[player.CharacterId] = new PlayerDrop
             {
                 State   = DropState.OnBoard,
+                Spot    = spot,
                 SampleY = spot.Y
             };
-
-            player.TeleportToLocal(spot, false);
         }
 
         /// <summary>
@@ -122,13 +125,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             Departed = true;
             OpenDoors();
 
-            foreach ((uint guid, PlayerDrop drop) in players)
+            foreach (IPlayer player in map.GetPlayers())
             {
-                if (drop.State != DropState.OnBoard)
-                    continue;
-
-                IPlayer player = map.GetEntity<IPlayer>(guid);
-                if (player == null)
+                if (!players.TryGetValue(player.CharacterId, out PlayerDrop drop)
+                    || drop.State != DropState.OnBoard
+                    || !drop.Boarded)
                     continue;
 
                 StartFalling(player, drop);
@@ -152,7 +153,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public bool EveryoneOff()
         {
-            return map.GetPlayers().All(p => !players.TryGetValue(p.Guid, out PlayerDrop drop) || drop.State != DropState.OnBoard);
+            return map.GetPlayers().All(p => !players.TryGetValue(p.CharacterId, out PlayerDrop drop) || drop.State != DropState.OnBoard);
         }
 
         /// <summary>
@@ -162,8 +163,25 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             foreach (IPlayer player in map.GetPlayers())
             {
-                if (!players.TryGetValue(player.Guid, out PlayerDrop drop))
+                if (!players.TryGetValue(player.CharacterId, out PlayerDrop drop))
                     continue;
+
+                if (!drop.Boarded)
+                {
+                    if (Departed)
+                    {
+                        // never made it on board, nothing to fall from
+                        drop.State = DropState.Landed;
+                        continue;
+                    }
+
+                    if (!player.CanTeleport())
+                        continue;
+
+                    drop.Boarded = true;
+                    player.TeleportToLocal(drop.Spot, false);
+                    continue;
+                }
 
                 switch (drop.State)
                 {

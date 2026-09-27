@@ -29,6 +29,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private readonly TimedActionQueue arrivalQueue = new();
 
+        // a teleport within the map removes and re-adds the player, the arrival only plays on the first add
+        private readonly HashSet<ulong> arrivedCharacters = [];
+
         #region Dependency Injection
 
         private readonly IFactory<ISpellParameters> spellParametersFactory;
@@ -60,7 +63,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // the intro event is created by the main event script, the base class only joins the main event
             HycrestPublicEvent.JoinPublicTeam(map.PublicEventManager.GetEvent(HycrestPublicEvent.Intro), player);
 
-            StartArrival(player);
+            if (arrivedCharacters.Add(player.CharacterId))
+                StartArrival(player);
         }
 
         private void StartArrival(IPlayer player)
