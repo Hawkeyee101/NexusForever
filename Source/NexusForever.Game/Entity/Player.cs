@@ -1350,8 +1350,9 @@ namespace NexusForever.Game.Entity
             if (PlatformGuid == null)
                 return;
 
-            IVehicleEntity vehicle = GetVisible<IVehicleEntity>(PlatformGuid.Value);
-            vehicle?.PassengerRemove(this);
+            // the platform can also be an entity the player stands on (e.g. a platform entity), which isn't a vehicle
+            if (GetVisible<IGridEntity>(PlatformGuid.Value) is IVehicleEntity vehicle)
+                vehicle.PassengerRemove(this);
         }
 
         /// <summary>
