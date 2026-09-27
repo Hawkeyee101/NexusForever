@@ -8,7 +8,7 @@ using NexusForever.Network.World.Entity;
 namespace NexusForever.Game.Cinematic.Cinematics
 {
     /// <summary>
-    /// Arrival in The Hycrest Insurrection: the Caretaker's four narration lines on a black screen, which also hides the
+    /// Arrival in The Hycrest Insurrection: the black screen under the Caretaker's narration (story windows), which also hides the
     /// move onto the intro ship, then the players "synchronise" into the simulation (green glow).
     /// </summary>
     /// <remarks>
@@ -50,7 +50,7 @@ namespace NexusForever.Game.Cinematic.Cinematics
         {
             Duration          = 20000;
             InitialFlags      = 7;
-            InitialCancelMode = 2;
+            InitialCancelMode = 0; // retail can't be skipped (2 showed "Esc to skip")
             CinematicId       = 0;
 
             StartTransition = new Transition(0, 1, 2, 1500, 0, 1500);
@@ -77,10 +77,8 @@ namespace NexusForever.Game.Cinematic.Cinematics
                 ]);
             }
 
-            AddText(683169, 500, 4500);
-            AddText(683170, 4700, 8700);
-            AddText(683171, 8900, 12700);
-            AddText(683172, 12900, 17000);
+            // no subtitles: retail shows the Caretaker's narration as story text over the black screen (the intro event
+            // script sends it as story communicators, window type 2)
         }
 
         private class CreatureSearchCheck : ISearchCheck<IWorldEntity>

@@ -8,6 +8,7 @@ using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.PublicEvent;
 using NexusForever.Game.Abstract.Spell;
+using NexusForever.Game.Static;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
@@ -50,15 +51,20 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // "synchronisation" glow, the Caretaker's two story communicators play (10 s each) while the hologram talks, then
         // Dawson comes out of the door where the hologram was
         private static readonly TimeSpan IntroTextRemaining = TimeSpan.FromSeconds(TheHycrestInsurrectionMapScript.UseCinematicTextIntro ? 20 : 1.5);
-        private static readonly TimeSpan Message1Delay      = IntroTextRemaining + TimeSpan.FromSeconds(0.5);
-        private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(10);
-        private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan Message1Delay      = TimeSpan.FromSeconds(0.5);
+        private static readonly TimeSpan Message2Delay      = TimeSpan.FromSeconds(8.8);
+        private static readonly TimeSpan HologramTalkDelay  = IntroTextRemaining - TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan DawsonAppearDelay  = IntroTextRemaining + TimeSpan.FromSeconds(11);
         private const uint DawsonPhase = 1u;
         private static readonly TimeSpan DawsonTalkFallback = TimeSpan.FromSeconds(60);
 
         private const uint CaretakerMessage1          = 534606u;
         private const uint CaretakerMessage2          = 534607u;
-        private const uint CaretakerMessageDurationMs = 10000u;
+        private const uint CaretakerMessageDurationMs = 8000u;
+
+        // retail shows the two Caretaker messages as centred, typed-in story text on the black screen: the story
+        // communicator's window type 2 (3 looks the same; 0 and 1 are the portrait pop-ups)
+        private const WindowType NarrationWindow = (WindowType)2;
 
         // the players "synchronise" into the simulation as the narration's black screen fades: Transimulator
         // Synchronization (spell 62968; green hologram overlay and Eldan teleporter, 3 s). Its CC state DisableCinematic
@@ -67,7 +73,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly TimeSpan SyncDelay    = IntroTextRemaining > TimeSpan.FromSeconds(2.5) ? IntroTextRemaining - TimeSpan.FromSeconds(2.5) : TimeSpan.Zero;
         private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
-        // the hologram talks (talk emote, Default_Talk ~4 s) during each message
+        // after the black screen the hologram talks (talk emote, Default_Talk ~4 s) for a while, then Dawson comes out
         private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8)];
 
         private IPublicEvent publicEvent;
@@ -268,8 +274,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
             actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
-            actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage1)));
-            actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage2)));
+            actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1)));
+            actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage2)));
+            actionQueue.Enqueue(HologramTalkDelay, PlayHologramTalk);
 
             if (dawsonAppearQueued)
                 return;
@@ -293,10 +300,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             player.CastSpell(SyncSpell, parameters);
         }
 
-        private void PlayCaretakerMessage(IPlayer player, uint textId)
+        private void PlayNarration(IPlayer player, uint textId)
         {
-            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs);
+            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs,
+                windowTypeId: NarrationWindow);
+        }
 
+        private void PlayHologramTalk()
+        {
             foreach (TimeSpan delay in HologramTalkTimes)
             {
                 actionQueue.Enqueue(delay, () =>
