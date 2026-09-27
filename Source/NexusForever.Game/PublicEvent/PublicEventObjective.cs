@@ -91,6 +91,11 @@ namespace NexusForever.Game.PublicEvent
 
             BroadcastObjectiveStatusUpdate();
 
+            // the client runs an objective's timer from the ElapsedTimeMs it last received (at event start for objectives
+            // activated later), so send the full objective on activation to restart the client's timer as well
+            if (status == PublicEventStatus.Active)
+                BroadcastObjectiveUpdate();
+
             Team.PublicEvent.InvokeScriptCollection<IPublicEventScript>(s => s.OnPublicEventObjectiveStatus(this));
         }
 
