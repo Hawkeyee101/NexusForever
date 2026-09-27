@@ -59,6 +59,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint CaretakerMessage2          = 534607u;
         private const uint CaretakerMessageDurationMs = 10000u;
 
+        // the players "synchronise" into the simulation as the narration's black screen fades: Transimulator
+        // Synchronization (spell 62968; green hologram overlay and Eldan teleporter, 3 s). Its CC state DisableCinematic
+        // has no duration (CancelOnly), so the spell is finished after SyncDuration
+        private const uint SyncSpell = 62968u;
+        private static readonly TimeSpan SyncDelay    = IntroTextRemaining > TimeSpan.FromSeconds(2.5) ? IntroTextRemaining - TimeSpan.FromSeconds(2.5) : TimeSpan.Zero;
+        private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
+
         // the hologram talks (talk emote, Default_Talk ~4 s) during each message
         private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8)];
 
@@ -234,7 +241,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             publicEvent.ActivateObjective(PublicEventObjective.ListenToDawson);
 
             foreach ((TimeSpan delay, uint textId) in DawsonBriefing)
-                actionQueue.Enqueue(delay, () => dialogue.Say(mapInstance.GetEntity<IWorldEntity>(dawsonGuid), textId, gesture: false));
+                actionQueue.Enqueue(delay, () => dialogue.Say(mapInstance.GetEntity<IWorldEntity>(dawsonGuid), textId, gesture: true));
         }
 
         private void OnPlayerArrival(IPlayer player)
@@ -259,6 +266,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             uint guid = player.Guid;
 
+            actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
+            actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
             actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage1)));
             actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage2)));
 
@@ -275,6 +284,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             IPlayer player = mapInstance.GetEntity<IPlayer>(guid);
             if (player != null)
                 action(player);
+        }
+
+        private void StartSync(IPlayer player)
+        {
+            ISpellParameters parameters = spellParametersFactory.Resolve();
+            parameters.PrimaryTargetId = player.Guid;
+            player.CastSpell(SyncSpell, parameters);
         }
 
         private void PlayCaretakerMessage(IPlayer player, uint textId)

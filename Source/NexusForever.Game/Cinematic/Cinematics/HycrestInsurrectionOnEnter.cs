@@ -29,18 +29,14 @@ namespace NexusForever.Game.Cinematic.Cinematics
 
         private const uint CinematicTimeline = 45237u; // plays Cinematic_Misc_00 (the whole timeline) on an actor
 
-        // retail: a black screen with the narration typed in. The camera's fade (transition type 1, the fade used by the
-        // start transition) goes to black at once, holds under the narration and fades the view in as it ends
+        // retail: a black screen with the narration typed in. The camera's fade goes to black at once, holds under the
+        // narration and fades the view in as it ends. The green synchronisation glow follows outside the cinematic, like
+        // retail (intro event script)
         private const uint   FadeInAt       = 17500u;
         private const ushort BlackHold      = 17000;
         private const ushort BlackFadeIn    = 1500;
-        private const uint   FadeTransition = 1u; // 3 (as between tutorial shots) faded through white
+        private const uint   FadeTransition = 2u; // 3 held white (the hold works), 1 didn't fade at all
 
-        // Transimulator Synchronization (spell 62968) visuals on the player as the view fades in: green hologram
-        // overlay (3 s) and the green Eldan teleporter effect (3 s)
-        private const uint SyncHologramVisualEffect = 20846u;
-        private const uint SyncTeleportVisualEffect = 24604u;
-        private const uint SyncDuration             = 3000u;
 
         protected override void Setup()
         {
@@ -66,12 +62,6 @@ namespace NexusForever.Game.Cinematic.Cinematics
             AddText(683170, 4700, 8700);
             AddText(683171, 8900, 12700);
             AddText(683172, 12900, 17000);
-
-            Keyframes.Add("Synchronisation", new List<IKeyframeAction>
-            {
-                new VisualEffect(SyncHologramVisualEffect, Player.Guid, initialDelay: FadeInAt, duration: SyncDuration),
-                new VisualEffect(SyncTeleportVisualEffect, Player.Guid, initialDelay: FadeInAt, duration: SyncDuration)
-            });
         }
     }
 }

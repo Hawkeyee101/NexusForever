@@ -155,7 +155,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Open the right door so players can walk down the ramp and jump; the left door stays closed.
+        /// Open the exit door so players can walk down the ramp and jump; the other door stays closed.
         /// </summary>
         public void OpenDoors()
         {
@@ -163,9 +163,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             DoorsOpen = true;
-            SetState(map.GetEntity<IWorldEntity>(RightDoorGuid), StandState.State1);
+            // the exit is the ramp on the ship's right (towards the barn); in game the "Left" door entity (28509) is the
+            // one that closes that doorway (27 Sep 2026: opening 18338 opened the other side)
+            SetState(map.GetEntity<IWorldEntity>(LeftDoorGuid), StandState.State1);
 
-            log.LogInformation("Hycrest: drop ship right door opened.");
+            log.LogInformation("Hycrest: drop ship exit door opened.");
         }
 
         /// <summary>
