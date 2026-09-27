@@ -63,10 +63,8 @@ namespace NexusForever.Game.Map.Instance
                     return mapPosition;
             }
 
-            // TODO: fallback to default return location
-            // maybe recall position?
-
-            return null;
+            // not entered through matching (or no return position there): back to where the player left the open world
+            return player.ReturnPosition;
         }
 
         protected override void AddEntity(IGridEntity entity, Vector3 vector, OnAddDelegate add = null)
