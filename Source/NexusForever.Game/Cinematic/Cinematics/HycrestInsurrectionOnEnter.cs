@@ -24,6 +24,11 @@ namespace NexusForever.Game.Cinematic.Cinematics
     {
         private const uint ActorCamera = 70555u; // GC217 - Hycrest Adventure Intro - Camera
 
+        // local dev aid ("!story hycrestintro <flags> [cancel]"): the story texts don't show over the cinematic with flags 7,
+        // other flag values are tried in game
+        public static ushort? FlagsOverride { get; set; }
+        public static ushort? CancelModeOverride { get; set; }
+
         // GC217 set origin: where the intro set ship (70557) used to spawn, identity rotation; only the final fade-in
         // shows the camera's view
         private static readonly Vector3 SetOrigin = new(-2520.6f, -873.6975f, -1240f);
@@ -40,21 +45,22 @@ namespace NexusForever.Game.Cinematic.Cinematics
         // retail: a black screen with the narration typed in. The camera's fade goes to black at once, holds under the
         // narration and fades the view in as it ends. The green synchronisation glow follows outside the cinematic, like
         // retail (intro event script)
-        private const uint   FadeInAt       = 17500u;
-        private const ushort BlackHold      = 17000;
-        private const ushort BlackFadeIn    = 1500;
+        // held until just before the cinematic ends: a fade-in showed the camera's view (under the map) for a moment
+        private const uint   FadeInAt       = 19800u;
+        private const ushort BlackHold      = 19800;
+        private const ushort BlackFadeIn    = 200;
         private const uint   FadeTransition = 2u; // 3 held white (the hold works), 1 didn't fade at all
 
 
         protected override void Setup()
         {
             Duration          = 20000;
-            InitialFlags      = 7;
-            InitialCancelMode = 0; // retail can't be skipped (2 showed "Esc to skip")
+            InitialFlags      = FlagsOverride ?? 7;
+            InitialCancelMode = CancelModeOverride ?? 0; // retail can't be skipped (2 showed "Esc to skip")
             CinematicId       = 0;
 
             StartTransition = new Transition(0, 1, 2, 1500, 0, 1500);
-            EndTransition   = new Transition(Duration - 1500, 0, 0);
+            EndTransition   = new Transition(FadeInAt, 0, 0);
 
             var origin = new Position(SetOrigin);
             IActor camera = new Actor(ActorCamera, 6, SetAngle, origin);

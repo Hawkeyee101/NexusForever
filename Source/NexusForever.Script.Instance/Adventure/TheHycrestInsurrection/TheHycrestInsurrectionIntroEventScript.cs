@@ -53,7 +53,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly TimeSpan IntroTextRemaining = TimeSpan.FromSeconds(TheHycrestInsurrectionMapScript.UseCinematicTextIntro ? 20 : 1.5);
         private static readonly TimeSpan Message1Delay      = TimeSpan.FromSeconds(0.5);
         private static readonly TimeSpan Message2Delay      = TimeSpan.FromSeconds(8.8);
-        private static readonly TimeSpan Repeat1Delay       = IntroTextRemaining - TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan Repeat1Delay       = IntroTextRemaining + TimeSpan.FromSeconds(1);
         private static readonly TimeSpan Repeat2Delay       = Repeat1Delay + TimeSpan.FromSeconds(10);
         private static readonly TimeSpan DawsonAppearDelay  = Repeat2Delay + TimeSpan.FromSeconds(10.5);
         private const uint DawsonPhase = 1u;
@@ -71,7 +71,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // Synchronization (spell 62968; green hologram overlay and Eldan teleporter, 3 s). Its CC state DisableCinematic
         // has no duration (CancelOnly), so the spell is finished after SyncDuration
         private const uint SyncSpell = 62968u;
-        private static readonly TimeSpan SyncDelay    = IntroTextRemaining > TimeSpan.FromSeconds(2.5) ? IntroTextRemaining - TimeSpan.FromSeconds(2.5) : TimeSpan.Zero;
+        private static readonly TimeSpan SyncDelay    = IntroTextRemaining;
         private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
         // after the black screen the hologram repeats the two messages as portrait pop-ups (10 s each) and talks (talk

@@ -51,15 +51,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public const float FloorY = -869.334f;
 
-        // arrival spots, measured (+0.5 m so arrivals don't start in the floor); one per party member, the sixth is spare
+        // arrival spots, measured standing (+0.05 m; +0.5 m dropped players onto the floor); one per party member, the sixth is spare
         public static readonly Vector3[] PlayerSpots =
         [
-            new(-2525.451f, -869.334f + 0.5f, -1243.369f),
-            new(-2527.751f, -868.914f + 0.5f, -1244.049f),
-            new(-2531.051f, -868.334f + 0.5f, -1244.999f),
-            new(-2530.411f, -868.314f + 0.5f, -1247.769f),
-            new(-2526.551f, -869.384f + 0.5f, -1247.689f),
-            new(-2523.891f, -869.344f + 0.5f, -1248.039f)
+            new(-2525.451f, -869.334f + 0.05f, -1243.369f),
+            new(-2527.751f, -868.914f + 0.05f, -1244.049f),
+            new(-2531.051f, -868.334f + 0.05f, -1244.999f),
+            new(-2530.411f, -868.314f + 0.05f, -1247.769f),
+            new(-2526.551f, -869.384f + 0.05f, -1247.689f),
+            new(-2523.891f, -869.344f + 0.05f, -1248.039f)
         ];
 
         // in front of the door with the red light strip, where the Caretaker hologram stands, and Dawson's spot, measured
