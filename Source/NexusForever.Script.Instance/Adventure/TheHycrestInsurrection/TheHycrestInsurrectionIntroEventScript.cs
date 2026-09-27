@@ -71,6 +71,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // Synchronization (spell 62968; green hologram overlay and Eldan teleporter, 3 s). Its CC state DisableCinematic
         // has no duration (CancelOnly), so the spell is finished after SyncDuration
         private const uint SyncSpell = 62968u;
+
+        // "Housing - 1x1 Tiki Lounge - Blackout": CC state Blind for 8 s, which blacks out the screen while the interface
+        // (the story text) stays visible
+        private const uint BlackoutSpell = 45014u;
+        private static readonly TimeSpan[] BlackoutCasts = [TimeSpan.Zero, TimeSpan.FromSeconds(7.5), TimeSpan.FromSeconds(15)];
         private static readonly TimeSpan SyncDelay    = IntroTextRemaining;
         private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
@@ -268,11 +273,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void OnPlayerLoaded(IPlayer player)
         {
-            // the narration on a black screen; it also hides the boarding teleport that follows
-            if (TheHycrestInsurrectionMapScript.UseCinematicTextIntro)
-                player.CinematicManager.QueueCinematic(cinematicFactory.CreateCinematic<IHycrestInsurrectionOnEnter>());
-
             uint guid = player.Guid;
+
+            // the narration on a black screen; it also hides the boarding teleport that follows. The black is a blind
+            // (a cinematic's black hid the story text): spell 45014, 8 s, recast until the narration ends, then finished
+            if (TheHycrestInsurrectionMapScript.UseCinematicTextIntro)
+            {
+                foreach (TimeSpan delay in BlackoutCasts)
+                    actionQueue.Enqueue(delay, () => WithPlayer(guid, CastBlackout));
+                actionQueue.Enqueue(IntroTextRemaining, () => WithPlayer(guid, p => p.GetSpellBySpellId(BlackoutSpell)?.Finish()));
+            }
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
             actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
@@ -294,6 +304,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             IPlayer player = mapInstance.GetEntity<IPlayer>(guid);
             if (player != null)
                 action(player);
+        }
+
+        private void CastBlackout(IPlayer player)
+        {
+            ISpellParameters parameters = spellParametersFactory.Resolve();
+            parameters.PrimaryTargetId = player.Guid;
+            player.CastSpell(BlackoutSpell, parameters);
         }
 
         private void StartSync(IPlayer player)
