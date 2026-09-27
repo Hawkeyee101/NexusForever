@@ -1,16 +1,21 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using NexusForever.Game.Abstract.Combat;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Creature;
+using NexusForever.Game.Abstract.Map.Search;
 using NexusForever.Game.Static;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.RBAC;
 using NexusForever.Game.Static.Reputation;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
+using NexusForever.Network.World.Entity;
+using NexusForever.Network.World.Message.Model;
 using NexusForever.Shared;
 using NexusForever.WorldServer.Command.Context;
 using NexusForever.WorldServer.Command.Convert;
@@ -37,6 +42,67 @@ namespace NexusForever.WorldServer.Command.Handler
                 }
 
                 context.GetTargetOrInvoker<IWorldEntity>().CreatureDisplayEntry = entry;
+            }
+
+            private static uint visualHandle = 0x47500000u;
+
+            // local dev aid (not for upstream): play a visual effect (e.g. a model sequence) on an entity that can't be
+            // targeted, such as a platform the player stands on
+            [Command(Permission.EntityModify, "Play a visual effect on the target, or on the nearest entity with the given creature id.", "visual")]
+            public void HandleEntityModifyVisual(ICommandContext context,
+                [Parameter("VisualEffect id to play.")]
+                uint visualEffectId,
+                [Parameter("Optional creature id: play on the nearest entity with this creature id instead of the target.")]
+                uint? creatureId)
+            {
+                if (GameTableManager.Instance.VisualEffect.GetEntry(visualEffectId) == null)
+                {
+                    context.SendMessage($"Invalid visual effect id {visualEffectId}!");
+                    return;
+                }
+
+                IWorldEntity entity;
+                if (creatureId.HasValue)
+                {
+                    IWorldEntity invoker = context.Invoker;
+                    entity = invoker.Map
+                        .Search(invoker.Position, 300f, new CreatureSearchCheck(creatureId.Value))
+                        .OrderBy(e => Vector3.DistanceSquared(e.Position, invoker.Position))
+                        .FirstOrDefault();
+                    if (entity == null)
+                    {
+                        context.SendMessage($"No entity with creature id {creatureId.Value} within 300 m!");
+                        return;
+                    }
+                }
+                else
+                    entity = context.GetTargetOrInvoker<IWorldEntity>();
+
+                entity.EnqueueToVisible(new ServerCinematicVisualEffect
+                {
+                    VisualHandle      = Interlocked.Increment(ref visualHandle),
+                    VisualEffectId    = visualEffectId,
+                    UnitId            = entity.Guid,
+                    Position          = new Position(entity.Position),
+                    RemoveOnCameraEnd = false
+                }, true);
+
+                context.SendMessage($"Played visual effect {visualEffectId} on entity {entity.Guid} (creature {entity.CreatureId}).");
+            }
+
+            private class CreatureSearchCheck : ISearchCheck<IWorldEntity>
+            {
+                private readonly uint creatureId;
+
+                public CreatureSearchCheck(uint creatureId)
+                {
+                    this.creatureId = creatureId;
+                }
+
+                public bool CheckEntity(IWorldEntity entity)
+                {
+                    return entity.CreatureId == creatureId;
+                }
             }
         }
 
