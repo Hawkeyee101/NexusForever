@@ -10,24 +10,28 @@ namespace NexusForever.Game.Cinematic.Cinematics
     /// move onto the intro ship, then the players "synchronise" into the simulation (green glow).
     /// </summary>
     /// <remarks>
-    /// Not built from packet captures. The retail intro cinematic (GC217) also has a flying ship and Dominion actors whose
-    /// origin and timings are unknown; this uses its camera creature and subtitle texts (683169-683172). Subtitles are only
-    /// shown when cinematic subtitles are enabled in the client options.
+    /// Not built from packet captures. Live retail showed the narration on black (spell 53052 "Adventure Intros Generic
+    /// Cinematic Disable" suggests the fly-in intros were turned off). The camera is the GC217 intro camera: like
+    /// EvilFromTheEtherOnCreate, the camera actor sits at the set origin and plays its whole baked timeline (visual 45237,
+    /// Cinematic_Misc_00), and the view is attached to its camera bones, one per shot (7, 8 at 6.0 s, 9 at 12.93 s, the
+    /// starts of its Cinematic_Misc_01/02/03). Without the animation the bones stay in the rest pose, far below the map.
+    /// The set origin is taken as the intro set ship's spawn position (it is the same set). Subtitles are only shown
+    /// when cinematic subtitles are enabled in the client options.
     /// </remarks>
     public class HycrestInsurrectionOnEnter : CinematicBase, IHycrestInsurrectionOnEnter
     {
         private const uint ActorCamera = 70555u; // GC217 - Hycrest Adventure Intro - Camera
 
-        // the players' arrival spot inside the intro ship (HycrestShipLayout.PlayerSpots, measured), eye height; the
-        // camera looks from here when the black screen fades out, where the player stands by then
-        private static readonly Vector3 CameraPosition = new(-2516.7417f, -872.3f, -1233.5726f);
-        private const float CameraAngle = 0.6482017f;
+        // intro set ship spawn (HycrestShipLayout.Origin, world database), identity rotation
+        private static readonly Vector3 SetOrigin = new(-2520.6f, -873.6975f, -1240f);
+        private const float SetAngle = 0f;
 
-        // black at once, held under the narration, faded out as it ends (start, hold and end durations in ms)
-        private const ushort BlackHold    = 18000;
-        private const ushort BlackFadeOut = 1500;
+        private const uint CinematicTimeline = 45237u; // plays Cinematic_Misc_00 (the whole timeline) on an actor
 
-        // Transimulator Synchronization (spell 62968) visuals on the player as the black screen fades: green hologram
+        // the screen stays black until the start transition fades the view in, as the narration ends
+        private const uint FadeInAt = 17500u;
+
+        // Transimulator Synchronization (spell 62968) visuals on the player as the view fades in: green hologram
         // overlay (3 s) and the green Eldan teleporter effect (3 s)
         private const uint SyncHologramVisualEffect = 20846u;
         private const uint SyncTeleportVisualEffect = 24604u;
@@ -40,22 +44,29 @@ namespace NexusForever.Game.Cinematic.Cinematics
             InitialCancelMode = 2;
             CinematicId       = 0;
 
-            StartTransition = new Transition(0, 1, 2, 0, BlackHold, BlackFadeOut);
-            EndTransition   = new Transition(Duration - BlackFadeOut, 0, 0);
+            StartTransition = new Transition(FadeInAt, 1, 2, 1500, 0, 1500);
+            EndTransition   = new Transition(Duration - 1500, 0, 0);
 
-            IActor camera = new Actor(ActorCamera, 6, CameraAngle, new Position(CameraPosition));
-            AddActor(camera, new List<IVisualEffect>());
-            AddCamera(new Camera(camera, 7, 0, true, 0, 0, BlackHold, BlackFadeOut));
+            var origin = new Position(SetOrigin);
+            IActor camera = new Actor(ActorCamera, 6, SetAngle, origin);
+            AddActor(camera, [new VisualEffect(CinematicTimeline)]);
+
+            ICamera view = new Camera(camera, 7, 0, true, 0);
+            view.AddAttach(6000, 8);
+            view.AddTransition(6000, 0);
+            view.AddAttach(12933, 9);
+            view.AddTransition(12933, 0);
+            AddCamera(view);
 
             AddText(683169, 500, 4500);
             AddText(683170, 4700, 8700);
             AddText(683171, 8900, 12700);
-            AddText(683172, 12900, 17500);
+            AddText(683172, 12900, 17000);
 
             Keyframes.Add("Synchronisation", new List<IKeyframeAction>
             {
-                new VisualEffect(SyncHologramVisualEffect, Player.Guid, initialDelay: BlackHold, duration: SyncDuration),
-                new VisualEffect(SyncTeleportVisualEffect, Player.Guid, initialDelay: BlackHold, duration: SyncDuration)
+                new VisualEffect(SyncHologramVisualEffect, Player.Guid, initialDelay: FadeInAt, duration: SyncDuration),
+                new VisualEffect(SyncTeleportVisualEffect, Player.Guid, initialDelay: FadeInAt, duration: SyncDuration)
             });
         }
     }
