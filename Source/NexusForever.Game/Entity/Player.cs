@@ -1097,6 +1097,10 @@ namespace NexusForever.Game.Entity
 
             SetControl(null);
 
+            // the platform (and its guid) belongs to the old map; kept, the client stays attached to it on the new map
+            if (PlatformGuid != null)
+                SetPlatform(null);
+
             IMapPosition source = null;
             if (Map != null)
             {
@@ -1163,6 +1167,11 @@ namespace NexusForever.Game.Entity
         private void OnTeleportToLocal(Vector3 position)
         {
             SetControl(null);
+
+            // while attached to a platform the client takes positions as offsets from it: leave the platform first,
+            // otherwise the player ends up at the platform's position plus the target (an empty void outside the map)
+            if (PlatformGuid != null)
+                SetPlatform(null);
 
             MovementManager.SetPosition(position, false);
             MovementManager.BroadcastNetworkEntityCommands();
