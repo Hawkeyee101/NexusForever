@@ -102,7 +102,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             this.spellParametersFactory = spellParametersFactory;
             this.storyBuilder           = storyBuilder;
             this.cinematicFactory       = cinematicFactory;
-            dialogue = new HycrestDialogue(gameTableManager);
+            dialogue = new HycrestDialogue(gameTableManager, actionQueue);
         }
 
         #endregion
@@ -307,7 +307,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 {
                     IWorldEntity hologram = mapInstance.GetEntity<IWorldEntity>(hologramGuid);
                     if (hologram != null)
-                        HycrestDialogue.PlayTalk(hologram);
+                        dialogue.PlayTalk(hologram);
                 });
             }
         }

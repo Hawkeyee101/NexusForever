@@ -91,7 +91,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             this.log              = log;
             this.gameTableManager = gameTableManager;
             this.storyBuilder     = storyBuilder;
-            dialogue = new HycrestDialogue(gameTableManager);
+            dialogue = new HycrestDialogue(gameTableManager, sceneQueue);
         }
 
         #endregion

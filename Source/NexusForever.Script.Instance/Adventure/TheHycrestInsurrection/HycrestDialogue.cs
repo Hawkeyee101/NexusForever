@@ -21,6 +21,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // with stand state Emote (the player "talk" emote 238, stand state Stand, didn't show on the hologram)
         public const uint TalkEmote = 75u;
 
+        // the emote's stand state (Emote) keeps looping the animation until it is reset, so each talk is stopped after
+        // about one Default_Talk cycle; overlapping talks keep it going until the last one ends
+        private static readonly TimeSpan TalkDuration = TimeSpan.FromSeconds(4);
+
         [GeneratedRegex(@"\$\(self\.visual=(\d+)\)")]
         private static partial Regex SelfVisualRegex();
 
@@ -30,10 +34,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static uint visualHandle = 0x48590000u;
 
         private readonly IGameTableManager gameTableManager;
+        private readonly TimedActionQueue actionQueue;
+        private readonly Dictionary<uint, int> talking = [];
 
-        public HycrestDialogue(IGameTableManager gameTableManager)
+        public HycrestDialogue(IGameTableManager gameTableManager, TimedActionQueue actionQueue)
         {
             this.gameTableManager = gameTableManager;
+            this.actionQueue      = actionQueue;
         }
 
         /// <summary>
@@ -71,15 +78,42 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Play the talking gesture on <paramref name="entity"/> for every player that can see it.
+        /// Play the talking gesture on <paramref name="entity"/> for every player that can see it, for about one talk cycle.
         /// </summary>
-        public static void PlayTalk(IWorldEntity entity)
+        public void PlayTalk(IWorldEntity entity)
         {
+            if (entity?.Map == null)
+                return;
+
             entity.EnqueueToVisible(new ServerEmote
             {
                 Guid       = entity.Guid,
                 StandState = StandState.Emote,
                 EmoteId    = TalkEmote
+            });
+
+            uint guid = entity.Guid;
+            talking[guid] = talking.GetValueOrDefault(guid) + 1;
+            actionQueue.Enqueue(TalkDuration, () => StopTalk(entity, guid));
+        }
+
+        private void StopTalk(IWorldEntity entity, uint guid)
+        {
+            int count = talking.GetValueOrDefault(guid) - 1;
+            if (count > 0)
+            {
+                talking[guid] = count;
+                return;
+            }
+
+            talking.Remove(guid);
+            if (entity.Map == null)
+                return;
+
+            entity.EnqueueToVisible(new ServerEmote
+            {
+                Guid       = entity.Guid,
+                StandState = StandState.Stand
             });
         }
 
