@@ -1,8 +1,6 @@
 using System.Numerics;
 using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract;
-using NexusForever.Game.Abstract.Cinematic;
-using NexusForever.Game.Abstract.Cinematic.Cinematics;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
@@ -46,16 +44,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // arriving players are put on the ship's deck shortly after entering the map
         private static readonly TimeSpan BoardDelay = TimeSpan.FromSeconds(0.5);
 
-        // arrival, timed from the moment a player's client has finished loading: the narration's black screen (20 s,
-        // HycrestInsurrectionOnEnter; boarding happens under it once the ship has arrived) fades with the green
-        // "synchronisation" glow, the Caretaker's two story communicators play (10 s each) while the hologram talks, then
-        // Dawson comes out of the door where the hologram was
-        private static readonly TimeSpan IntroTextRemaining = TimeSpan.FromSeconds(TheHycrestInsurrectionMapScript.UseCinematicTextIntro ? 20 : 1.5);
-        private static readonly TimeSpan Message1Delay      = TimeSpan.FromSeconds(0.5);
-        private static readonly TimeSpan Message2Delay      = TimeSpan.FromSeconds(8.8);
-        private static readonly TimeSpan Repeat1Delay       = IntroTextRemaining + TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan Repeat2Delay       = Repeat1Delay + TimeSpan.FromSeconds(10);
-        private static readonly TimeSpan DawsonAppearDelay  = Repeat2Delay + TimeSpan.FromSeconds(10.5);
+        // arrival, timed from a player being put on board (1.5 s after the client has loaded, behind a loading screen):
+        // the green "synchronisation" glow, then the Caretaker's narration as centred story text (retail's typed-in text,
+        // 8 s each) while the hologram talks, then Dawson comes out of the door where the hologram was
+        private static readonly TimeSpan SyncDelay          = TimeSpan.FromSeconds(0.5);
+        private static readonly TimeSpan Message1Delay      = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(8.5);
+        private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(9);
         private const uint DawsonPhase = 1u;
         private static readonly TimeSpan DawsonTalkFallback = TimeSpan.FromSeconds(60);
 
@@ -71,17 +66,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // Synchronization (spell 62968; green hologram overlay and Eldan teleporter, 3 s). Its CC state DisableCinematic
         // has no duration (CancelOnly), so the spell is finished after SyncDuration
         private const uint SyncSpell = 62968u;
-
-        // "Housing - 1x1 Tiki Lounge - Blackout": CC state Blind for 8 s, which blacks out the screen while the interface
-        // (the story text) stays visible
-        private const uint BlackoutSpell = 45014u;
-        private static readonly TimeSpan[] BlackoutCasts = [TimeSpan.Zero, TimeSpan.FromSeconds(7.5), TimeSpan.FromSeconds(15)];
-        private static readonly TimeSpan SyncDelay    = IntroTextRemaining;
         private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
-        // after the black screen the hologram repeats the two messages as portrait pop-ups (10 s each) and talks (talk
-        // emote, Default_Talk ~4 s) during them, then Dawson comes out
-        private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8)];
+        // the hologram talks (talk emote, Default_Talk ~4 s) while each narration message shows
+        private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4)];
 
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
@@ -103,19 +91,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly HycrestDialogue dialogue;
         private readonly IFactory<ISpellParameters> spellParametersFactory;
         private readonly IStoryBuilder storyBuilder;
-        private readonly ICinematicFactory cinematicFactory;
 
         public TheHycrestInsurrectionIntroEventScript(
             ILogger<TheHycrestInsurrectionIntroEventScript> log,
             IGameTableManager gameTableManager,
             IFactory<ISpellParameters> spellParametersFactory,
-            IStoryBuilder storyBuilder,
-            ICinematicFactory cinematicFactory)
+            IStoryBuilder storyBuilder)
         {
             this.log                    = log;
             this.spellParametersFactory = spellParametersFactory;
             this.storyBuilder           = storyBuilder;
-            this.cinematicFactory       = cinematicFactory;
             dialogue = new HycrestDialogue(gameTableManager, actionQueue);
         }
 
@@ -129,8 +114,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             publicEvent = owner;
             mapInstance = publicEvent.Map as IMapInstance;
             dropShip    = new HycrestDropShip(mapInstance, spellParametersFactory, log, actionQueue);
-            dropShip.BoardWithLoadingScreen = !TheHycrestInsurrectionMapScript.UseCinematicTextIntro;
-            dropShip.PlayerLoaded  += OnPlayerLoaded;
+            dropShip.PlayerBoarded += OnPlayerBoarded;
 
             // spawns Vice-Marshal Dawson, objective 2113 is initial and completed by talking to him
             publicEvent.SetPhase(0u);
@@ -271,25 +255,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             });
         }
 
-        private void OnPlayerLoaded(IPlayer player)
+        private void OnPlayerBoarded(IPlayer player)
         {
             uint guid = player.Guid;
-
-            // the narration on a black screen; it also hides the boarding teleport that follows. The black is a blind
-            // (a cinematic's black hid the story text): spell 45014, 8 s, recast until the narration ends, then finished
-            if (TheHycrestInsurrectionMapScript.UseCinematicTextIntro)
-            {
-                foreach (TimeSpan delay in BlackoutCasts)
-                    actionQueue.Enqueue(delay, () => WithPlayer(guid, CastBlackout));
-                actionQueue.Enqueue(IntroTextRemaining, () => WithPlayer(guid, p => p.GetSpellBySpellId(BlackoutSpell)?.Finish()));
-            }
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
             actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
             actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1)));
             actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage2)));
-            actionQueue.Enqueue(Repeat1Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage1)));
-            actionQueue.Enqueue(Repeat2Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage2)));
 
             if (dawsonAppearQueued)
                 return;
@@ -306,13 +279,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 action(player);
         }
 
-        private void CastBlackout(IPlayer player)
-        {
-            ISpellParameters parameters = spellParametersFactory.Resolve();
-            parameters.PrimaryTargetId = player.Guid;
-            player.CastSpell(BlackoutSpell, parameters);
-        }
-
         private void StartSync(IPlayer player)
         {
             ISpellParameters parameters = spellParametersFactory.Resolve();
@@ -324,11 +290,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs,
                 windowTypeId: NarrationWindow);
-        }
-
-        private void PlayCaretakerMessage(IPlayer player, uint textId)
-        {
-            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, 10000u);
             PlayHologramTalk();
         }
 

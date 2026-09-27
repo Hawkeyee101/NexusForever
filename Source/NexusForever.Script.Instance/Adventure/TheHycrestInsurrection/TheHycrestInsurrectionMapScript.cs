@@ -1,6 +1,4 @@
 using NexusForever.Game.Abstract;
-using NexusForever.Game.Abstract.Cinematic;
-using NexusForever.Game.Abstract.Cinematic.Cinematics;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.PublicEvent;
 using NexusForever.Game.Abstract.Spell;
@@ -14,10 +12,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     {
         public override uint PublicEventId => HycrestPublicEvent.Main;
 
-        // retail: arriving players see the Caretaker's narration (683169-683172) on a black screen, which also hides
-        // the move onto the ship; the Caretaker's story communicators follow. Both are played by the intro event script,
-        // the narration once the client has finished loading (a cinematic sent during loading isn't shown)
-        public const bool UseCinematicTextIntro = true;
+        // arrival: the intro event script puts players on board behind a loading screen and shows the Caretaker's
+        // narration as centred story text (retail showed it on a black screen; a cinematic's black hid the text, see
+        // HYCREST.md). A proper arrival cinematic (camera in the ship) is a later option.
 
         private const uint NighttimeSkyboxSpell = 27236u;
 
