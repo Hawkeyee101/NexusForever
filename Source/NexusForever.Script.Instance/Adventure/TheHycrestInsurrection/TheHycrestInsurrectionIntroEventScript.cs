@@ -43,11 +43,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly TimeSpan BoardDelay = TimeSpan.FromSeconds(0.5);
 
         // arrival, timed from a player's boarding (1.5 s after the client has loaded, under the intro text's black screen):
-        // the intro text (20 s from load) ends, the player "synchronises" into the simulation (green glow), the Caretaker's
-        // two story communicators play (10 s each) while the hologram talks, then Dawson comes out of the door where the
-        // hologram was
+        // the intro text (20 s from load, with the green "synchronisation" glow as it ends, see HycrestInsurrectionOnEnter)
+        // ends, the Caretaker's two story communicators play (10 s each) while the hologram talks, then Dawson comes out
+        // of the door where the hologram was
         private static readonly TimeSpan IntroTextRemaining = TimeSpan.FromSeconds(TheHycrestInsurrectionMapScript.UseCinematicTextIntro ? 18.5 : 0);
-        private static readonly TimeSpan SyncGlowDelay      = IntroTextRemaining > TimeSpan.FromSeconds(1.5) ? IntroTextRemaining - TimeSpan.FromSeconds(1.5) : TimeSpan.Zero;
         private static readonly TimeSpan Message1Delay      = IntroTextRemaining + TimeSpan.FromSeconds(0.5);
         private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(10);
         private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(10);
@@ -57,15 +56,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint CaretakerMessage2          = 534607u;
         private const uint CaretakerMessageDurationMs = 10000u;
 
-        // the hologram is a Simple entity and doesn't animate by itself (retail: spell 63212 put a Caretaker disguise on
-        // an NPC); it talks (Default_Talk, 4 s) during each message
+        // the hologram talks (talk emote, Default_Talk ~4 s) during each message
         private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8)];
-
-        // Transimulator Synchronization (spell 62968) visuals only: green hologram overlay and the green Eldan teleporter
-        // effect (3 s). The spell itself also sets CC state DisableCinematic without a duration, so it isn't cast.
-        private const uint SyncHologramVisualEffect  = 20846u;
-        private const uint SyncTeleportVisualEffect  = 24604u;
-        private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
@@ -245,7 +237,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             uint guid = player.Guid;
 
-            actionQueue.Enqueue(SyncGlowDelay, () => WithPlayer(guid, PlaySync));
             actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage1)));
             actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage2)));
 
@@ -264,15 +255,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 action(player);
         }
 
-        private void PlaySync(IPlayer player)
-        {
-            uint hologram = HycrestDialogue.PlayVisualEffect(player, SyncHologramVisualEffect);
-            HycrestDialogue.PlayVisualEffect(player, SyncTeleportVisualEffect);
-
-            uint guid = player.Guid;
-            actionQueue.Enqueue(SyncDuration, () => WithPlayer(guid, p => HycrestDialogue.EndVisualEffect(p, hologram)));
-        }
-
         private void PlayCaretakerMessage(IPlayer player, uint textId)
         {
             storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs);
@@ -283,7 +265,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 {
                     IWorldEntity hologram = mapInstance.GetEntity<IWorldEntity>(hologramGuid);
                     if (hologram != null)
-                        HycrestDialogue.PlayVisualEffect(hologram, HycrestDialogue.TalkGestureVisualEffect);
+                        HycrestDialogue.PlayTalk(hologram);
                 });
             }
         }

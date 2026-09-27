@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Static.Entity;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Entity;
@@ -15,8 +16,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// </remarks>
     public partial class HycrestDialogue
     {
-        // talking gesture used by Vesna's and Lysion's lines in en-US.bin ($(self.visual=5701)), 4 s, model sequence 278
-        public const uint TalkGestureVisualEffect = 5701u;
+        // talking gesture for lines with $(self.visual=5701) in en-US.bin (visual 5701 plays Default_Talk, 278). Cinematic
+        // visual effects only show during a cinematic, so the gesture is the "talk" emote (238), also Default_Talk
+        public const uint TalkEmote = 238u;
 
         [GeneratedRegex(@"\$\(self\.visual=(\d+)\)")]
         private static partial Regex SelfVisualRegex();
@@ -64,12 +66,28 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             speaker.NpcSay(GetText(textId));
 
             if (gesture ?? SelfVisualRegex().IsMatch(raw))
-                PlayVisualEffect(speaker, TalkGestureVisualEffect);
+                PlayTalk(speaker);
+        }
+
+        /// <summary>
+        /// Play the talking gesture on <paramref name="entity"/> for every player that can see it.
+        /// </summary>
+        public static void PlayTalk(IWorldEntity entity)
+        {
+            entity.EnqueueToVisible(new ServerEmote
+            {
+                Guid       = entity.Guid,
+                StandState = StandState.Stand,
+                EmoteId    = TalkEmote
+            });
         }
 
         /// <summary>
         /// Play a visual effect on <paramref name="entity"/> for every player that can see it.
         /// </summary>
+        /// <remarks>
+        /// The client only shows cinematic visual effects while a cinematic is playing.
+        /// </remarks>
         public static uint PlayVisualEffect(IWorldEntity entity, uint visualEffectId)
         {
             uint handle = Interlocked.Increment(ref visualHandle);

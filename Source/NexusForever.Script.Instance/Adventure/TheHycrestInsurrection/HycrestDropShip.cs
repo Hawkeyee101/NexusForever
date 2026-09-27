@@ -35,6 +35,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             public double SinceCast;
             public float SampleY;
             public double SinceSample;
+            public double SinceFall;
         }
 
         // boarding waits this long after the client has finished loading the map (it can teleport again), and the
@@ -54,10 +55,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // fallback when the platform attachment isn't reported: a player this far below the deck has left the ship
         private const float LeaveDistance = 3f;
 
-        // landed: moved less than LandedMaxDrop vertically within LandedWindow; a window is used because position
-        // updates don't arrive every tick and the slow-burn descent is slow
-        private const float LandedMaxDrop = 0.3f;
-        private const double LandedWindow = 1d;
+        // landed: within LandedHeight of the terrain (map file; props like roofs aren't in it), or no longer falling
+        // (moved less than LandedMaxDrop vertically within LandedWindow) once the player has fallen for at least
+        // MinFallTime; right after leaving the ship the fall is still too slow to tell (27 Sep 2026: Rocket Fall stopped
+        // after one cast because the first window counted as landed)
+        private const float LandedHeight   = 2f;
+        private const float LandedMaxDrop  = 0.3f;
+        private const double LandedWindow  = 1d;
+        private const double MinFallTime   = 5d;
+        private const double MaxFallTime   = 120d;
 
         // the door and the walkway are part of the Set Ship model (70557), not separate entities. The model has no
         // active prop states, only the intro cinematic's sequences on one timeline: Cinematic_Misc_01 (3.3-9.3 s),
@@ -299,15 +305,25 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             drop.State       = DropState.Falling;
             drop.SampleY     = player.Position.Y;
             drop.SinceSample = 0d;
+            drop.SinceFall   = 0d;
             CastRocketFall(player, drop);
         }
 
         private void UpdateFalling(IPlayer player, PlayerDrop drop, float y, double lastTick)
         {
+            drop.SinceFall   += lastTick;
             drop.SinceSample += lastTick;
+
+            float? ground = map.GetTerrainHeight(player.Position.X, player.Position.Z);
+            if ((ground.HasValue && y - ground.Value < LandedHeight) || drop.SinceFall >= MaxFallTime)
+            {
+                drop.State = DropState.Landed;
+                return;
+            }
+
             if (drop.SinceSample >= LandedWindow)
             {
-                if (Math.Abs(y - drop.SampleY) < LandedMaxDrop)
+                if (drop.SinceFall >= MinFallTime && Math.Abs(y - drop.SampleY) < LandedMaxDrop)
                 {
                     drop.State = DropState.Landed;
                     return;
