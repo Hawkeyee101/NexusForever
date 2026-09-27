@@ -53,8 +53,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly TimeSpan IntroTextRemaining = TimeSpan.FromSeconds(TheHycrestInsurrectionMapScript.UseCinematicTextIntro ? 20 : 1.5);
         private static readonly TimeSpan Message1Delay      = TimeSpan.FromSeconds(0.5);
         private static readonly TimeSpan Message2Delay      = TimeSpan.FromSeconds(8.8);
-        private static readonly TimeSpan HologramTalkDelay  = IntroTextRemaining - TimeSpan.FromSeconds(1.5);
-        private static readonly TimeSpan DawsonAppearDelay  = IntroTextRemaining + TimeSpan.FromSeconds(11);
+        private static readonly TimeSpan Repeat1Delay       = IntroTextRemaining - TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan Repeat2Delay       = Repeat1Delay + TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan DawsonAppearDelay  = Repeat2Delay + TimeSpan.FromSeconds(10.5);
         private const uint DawsonPhase = 1u;
         private static readonly TimeSpan DawsonTalkFallback = TimeSpan.FromSeconds(60);
 
@@ -73,7 +74,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly TimeSpan SyncDelay    = IntroTextRemaining > TimeSpan.FromSeconds(2.5) ? IntroTextRemaining - TimeSpan.FromSeconds(2.5) : TimeSpan.Zero;
         private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
-        // after the black screen the hologram talks (talk emote, Default_Talk ~4 s) for a while, then Dawson comes out
+        // after the black screen the hologram repeats the two messages as portrait pop-ups (10 s each) and talks (talk
+        // emote, Default_Talk ~4 s) during them, then Dawson comes out
         private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8)];
 
         private IPublicEvent publicEvent;
@@ -276,7 +278,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
             actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1)));
             actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage2)));
-            actionQueue.Enqueue(HologramTalkDelay, PlayHologramTalk);
+            actionQueue.Enqueue(Repeat1Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage1)));
+            actionQueue.Enqueue(Repeat2Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage2)));
 
             if (dawsonAppearQueued)
                 return;
@@ -304,6 +307,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs,
                 windowTypeId: NarrationWindow);
+        }
+
+        private void PlayCaretakerMessage(IPlayer player, uint textId)
+        {
+            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, 10000u);
+            PlayHologramTalk();
         }
 
         private void PlayHologramTalk()
