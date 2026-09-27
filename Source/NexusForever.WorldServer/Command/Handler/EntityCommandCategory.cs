@@ -55,12 +55,7 @@ namespace NexusForever.WorldServer.Command.Handler
                 [Parameter("Optional creature id: play on the nearest entity with this creature id instead of the target.")]
                 uint? creatureId)
             {
-                if (GameTableManager.Instance.VisualEffect.GetEntry(visualEffectId) == null)
-                {
-                    context.SendMessage($"Invalid visual effect id {visualEffectId}!");
-                    return;
-                }
-
+                // the VisualEffect table isn't loaded by the server (no [GameData]), so the id isn't validated
                 IWorldEntity entity;
                 if (creatureId.HasValue)
                 {

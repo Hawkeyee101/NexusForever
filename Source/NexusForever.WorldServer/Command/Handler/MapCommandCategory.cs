@@ -1,6 +1,9 @@
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Map;
+using Microsoft.Extensions.DependencyInjection;
 using NexusForever.Game.Abstract.Map.Instance;
+using NexusForever.Game.Abstract.Map.Lock;
+using NexusForever.Shared;
 using NexusForever.Game.Map;
 using NexusForever.Game.Static.Map;
 using NexusForever.Game.Static.RBAC;
@@ -24,6 +27,27 @@ namespace NexusForever.WorldServer.Command.Handler
             }
 
             instance.Unload();
+        }
+
+        // local dev aid (not for upstream): retest content that runs once per instance, such as the Hycrest intro
+        [Command(Permission.MapUnload, "Move into a fresh instance of the current world (drops your solo lock for it).", "fresh")]
+        public void HandleMapFresh(ICommandContext context)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            if (player.Map is not IMapInstance)
+            {
+                context.SendError("Current map is not an instance!");
+                return;
+            }
+
+            ushort worldId = (ushort)player.Map.Entry.Id;
+
+            // TODO: replace with dependency injection once commands system is refactored
+            var mapLockManager = LegacyServiceProvider.Provider.GetService<IMapLockManager>();
+            mapLockManager.RemoveSoloLock(player.Identity, worldId);
+
+            player.TeleportTo(worldId, player.Position.X, player.Position.Y, player.Position.Z);
+            context.SendMessage($"Moving into a fresh instance of world {worldId}. The old instance is left empty.");
         }
 
         [Command(Permission.MapPlayerRemove, "Remove player from current map instance.", "remove")]
