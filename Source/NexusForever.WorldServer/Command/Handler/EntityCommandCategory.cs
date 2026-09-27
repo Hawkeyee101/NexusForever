@@ -135,8 +135,12 @@ namespace NexusForever.WorldServer.Command.Handler
             [Parameter("Temporary entities will be removed when the summoner is removed from map. Defaults to true.")]
             bool? temporary,
             [Parameter("Entity type of the entity to summon. Defaults to game table value if not supplied.", converter: typeof(EnumParameterConverter<EntityType>))]
-            EntityType? entityType)
+            EntityType? entityType,
+            [Parameter("Optional height above your position to summon at (local dev aid).")]
+            float? height)
         {
+            Vector3 position = context.Invoker.Position + new Vector3(0f, height ?? 0f, 0f);
+
             // TODO: replace with dependency injection once commands system is refactored
             var creatureInfoManager = LegacyServiceProvider.Provider.GetService<ICreatureInfoManager>();
             var entityFactory = LegacyServiceProvider.Provider.GetService<IEntityFactory>();
@@ -149,12 +153,12 @@ namespace NexusForever.WorldServer.Command.Handler
             }
 
             if (temporary ?? true)
-                context.Invoker.SummonFactory.Summon(creatureInfo, entityType ?? creatureInfo.Entry.CreationTypeEnum, context.Invoker.Position, context.Invoker.Rotation);
+                context.Invoker.SummonFactory.Summon(creatureInfo, entityType ?? creatureInfo.Entry.CreationTypeEnum, position, context.Invoker.Rotation);
             else
             {
                 IWorldEntity entity = entityFactory.CreateWorldEntity(entityType ?? creatureInfo.Entry.CreationTypeEnum);
                 entity.Initialise(creatureInfo);
-                entity.AddToMap(context.Invoker.Map, context.Invoker.Position);
+                entity.AddToMap(context.Invoker.Map, position);
             }
         }
 
