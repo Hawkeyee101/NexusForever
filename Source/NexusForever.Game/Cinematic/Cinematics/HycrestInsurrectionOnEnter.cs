@@ -83,8 +83,8 @@ namespace NexusForever.Game.Cinematic.Cinematics
                 ]);
             }
 
-            // no subtitles: retail shows the Caretaker's narration as story text over the black screen (the intro event
-            // script sends it as story communicators, window type 2)
+            // no subtitles: the intro event script sends the Caretaker's narration after the black screen, as story
+            // communicators (a cinematic hides story windows)
         }
 
         private class CreatureSearchCheck : ISearchCheck<IWorldEntity>

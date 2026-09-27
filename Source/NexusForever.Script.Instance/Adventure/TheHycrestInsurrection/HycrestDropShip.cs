@@ -51,6 +51,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // re-applied just before it runs out so there is no gap
         private const uint RocketFallSpell = 47734u;
         private const double RocketFallRecast = 2.9d;
+        // a cast that didn't take (e.g. the player was still casting) is tried again this soon
+        private const double RocketFallRetry = 0.25d;
 
         // fallback when the platform attachment isn't reported: a player this far below the deck has left the ship
         private const float LeaveDistance = 3f;
@@ -403,9 +405,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             drop.SinceCast = 0d;
 
+            // cast by the script, not the player: skips the cooldown and global cooldown checks (a player cast just before
+            // the jump put Rocket Fall on the global cooldown and the cast failed)
             ISpellParameters parameters = spellParametersFactory.Resolve();
-            parameters.PrimaryTargetId = player.Guid;
+            parameters.PrimaryTargetId        = player.Guid;
+            parameters.UserInitiatedSpellCast = false;
             player.CastSpell(RocketFallSpell, parameters);
+
+            if (player.GetSpellBySpellId(RocketFallSpell) == null)
+                drop.SinceCast = RocketFallRecast - RocketFallRetry;
         }
     }
 }

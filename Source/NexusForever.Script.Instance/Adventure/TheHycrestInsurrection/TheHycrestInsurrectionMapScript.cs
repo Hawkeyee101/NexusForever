@@ -62,7 +62,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             arrivalQueue.Enqueue(ArrivalSkyboxDelay, () => WithPlayer(guid, p =>
             {
                 ISpellParameters parameters = spellParametersFactory.Resolve();
-                parameters.PrimaryTargetId = p.Guid;
+                parameters.PrimaryTargetId        = p.Guid;
+                parameters.UserInitiatedSpellCast = false;
                 p.CastSpell(NighttimeSkyboxSpell, parameters);
             }));
         }

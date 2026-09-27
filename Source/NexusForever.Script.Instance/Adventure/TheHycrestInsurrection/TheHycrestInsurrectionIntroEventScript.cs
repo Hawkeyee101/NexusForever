@@ -48,23 +48,22 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         // arrival, timed from the moment a player's client has finished loading: a black screen (the arrival cinematic,
         // 20 s) covers the ship flying in and the boarding teleport; then the green "synchronisation" glow, the Caretaker's
-        // narration as centred story text (retail's typed-in text, 8 s each; a cinematic hides story text, so it follows
-        // the black screen) while the hologram talks, then Dawson comes out of the door where the hologram was
+        // narration as portrait pop-ups (10 s each) while the hologram talks, then Dawson comes out of the door where the hologram was
         private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(20);
         private static readonly TimeSpan SyncDelay          = BlackScreen;
         private static readonly TimeSpan Message1Delay      = BlackScreen + TimeSpan.FromSeconds(1.5);
-        private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(8.5);
-        private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(9);
+        private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(10);
         private const uint DawsonPhase = 1u;
         private static readonly TimeSpan DawsonTalkFallback = TimeSpan.FromSeconds(60);
 
         private const uint CaretakerMessage1          = 534606u;
         private const uint CaretakerMessage2          = 534607u;
-        private const uint CaretakerMessageDurationMs = 8000u;
+        private const uint CaretakerMessageDurationMs = 10000u;
 
-        // retail shows the two Caretaker messages as centred, typed-in story text on the black screen: the story
-        // communicator's window type 2 (3 looks the same; 0 and 1 are the portrait pop-ups)
-        private const WindowType NarrationWindow = (WindowType)2;
+        // the two Caretaker messages are the portrait pop-ups (the story communicator's default window type). Window types 2
+        // and 3 are retail's centred, typed-in story text on black; a cinematic hides story text, so they can only be used
+        // once there is a real arrival cinematic that ends in them
 
         // the players "synchronise" into the simulation as the narration's black screen fades: Transimulator
         // Synchronization (spell 62968; green hologram overlay and Eldan teleporter, 3 s). Its CC state DisableCinematic
@@ -292,14 +291,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private void StartSync(IPlayer player)
         {
             ISpellParameters parameters = spellParametersFactory.Resolve();
-            parameters.PrimaryTargetId = player.Guid;
+            parameters.PrimaryTargetId        = player.Guid;
+            parameters.UserInitiatedSpellCast = false;
             player.CastSpell(SyncSpell, parameters);
         }
 
         private void PlayNarration(IPlayer player, uint textId)
         {
-            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs,
-                windowTypeId: NarrationWindow);
+            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs);
             PlayHologramTalk();
         }
 
