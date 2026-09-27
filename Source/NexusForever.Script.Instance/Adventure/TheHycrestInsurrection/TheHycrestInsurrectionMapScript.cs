@@ -14,18 +14,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     {
         public override uint PublicEventId => HycrestPublicEvent.Main;
 
-        // arrival text: the text-only intro cinematic (683169-683172) is experimental, it is unknown whether the client
-        // shows it without a camera; the default are the Caretaker story communicators (534606, 534607)
-        public const bool UseCinematicTextIntro = false;
+        // retail: arriving players see the Caretaker's narration (683169-683172) on a black screen, which also hides
+        // the move onto the ship; the Caretaker's story communicators follow (intro event script, after boarding)
+        public const bool UseCinematicTextIntro = true;
 
         private const uint NighttimeSkyboxSpell = 27236u;
-        private const uint CaretakerMessage1    = 534606u;
-        private const uint CaretakerMessage2    = 534607u;
-        private const uint CaretakerMessageDurationMs = 10000u;
 
-        private static readonly TimeSpan ArrivalSkyboxDelay   = TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan ArrivalMessage1Delay = TimeSpan.FromSeconds(2);
-        private static readonly TimeSpan ArrivalMessage2Delay = TimeSpan.FromSeconds(12);
+        private static readonly TimeSpan ArrivalSkyboxDelay = TimeSpan.FromSeconds(1);
 
         private readonly TimedActionQueue arrivalQueue = new();
 
@@ -35,16 +30,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         #region Dependency Injection
 
         private readonly IFactory<ISpellParameters> spellParametersFactory;
-        private readonly IStoryBuilder storyBuilder;
         private readonly ICinematicFactory cinematicFactory;
 
         public TheHycrestInsurrectionMapScript(
             IFactory<ISpellParameters> spellParametersFactory,
-            IStoryBuilder storyBuilder,
             ICinematicFactory cinematicFactory)
         {
             this.spellParametersFactory = spellParametersFactory;
-            this.storyBuilder           = storyBuilder;
             this.cinematicFactory       = cinematicFactory;
         }
 
@@ -80,15 +72,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             }));
 
             if (UseCinematicTextIntro)
-            {
                 player.CinematicManager.QueueCinematic(cinematicFactory.CreateCinematic<IHycrestInsurrectionOnEnter>());
-                return;
-            }
-
-            arrivalQueue.Enqueue(ArrivalMessage1Delay, () => WithPlayer(guid, p =>
-                storyBuilder.SendStoryCommunicator(CaretakerMessage1, (uint)PublicEventCreature.TheCaretaker, p, CaretakerMessageDurationMs)));
-            arrivalQueue.Enqueue(ArrivalMessage2Delay, () => WithPlayer(guid, p =>
-                storyBuilder.SendStoryCommunicator(CaretakerMessage2, (uint)PublicEventCreature.TheCaretaker, p, CaretakerMessageDurationMs)));
         }
 
         private void WithPlayer(uint guid, Action<IPlayer> action)

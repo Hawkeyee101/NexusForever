@@ -70,16 +70,30 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// <summary>
         /// Play a visual effect on <paramref name="entity"/> for every player that can see it.
         /// </summary>
-        public static void PlayVisualEffect(IWorldEntity entity, uint visualEffectId)
+        public static uint PlayVisualEffect(IWorldEntity entity, uint visualEffectId)
         {
+            uint handle = Interlocked.Increment(ref visualHandle);
             entity.EnqueueToVisible(new ServerCinematicVisualEffect
             {
-                VisualHandle      = Interlocked.Increment(ref visualHandle),
+                VisualHandle      = handle,
                 VisualEffectId    = visualEffectId,
                 UnitId            = entity.Guid,
                 Position          = new Position(entity.Position),
                 RemoveOnCameraEnd = false
-            });
+            }, true);
+
+            return handle;
+        }
+
+        /// <summary>
+        /// End a visual effect started with <see cref="PlayVisualEffect"/> for every player that can see <paramref name="entity"/>.
+        /// </summary>
+        public static void EndVisualEffect(IWorldEntity entity, uint handle)
+        {
+            entity.EnqueueToVisible(new ServerCinematicVisualEffectEnd
+            {
+                VisualHandle = handle
+            }, true);
         }
     }
 }

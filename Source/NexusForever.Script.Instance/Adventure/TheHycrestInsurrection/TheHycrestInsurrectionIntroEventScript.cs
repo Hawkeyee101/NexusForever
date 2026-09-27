@@ -1,5 +1,6 @@
 using System.Numerics;
 using Microsoft.Extensions.Logging;
+using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
@@ -41,14 +42,30 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // arriving players are put on the ship's deck shortly after entering the map
         private static readonly TimeSpan BoardDelay = TimeSpan.FromSeconds(0.5);
 
-        // retail: the Caretaker's hologram stands in the ship; after the Caretaker's two messages (2 s and 12 s after
-        // arriving, 10 s each) Dawson comes out of the door where the hologram was
-        private static readonly TimeSpan DawsonAppearDelay = TimeSpan.FromSeconds(22);
-
-        // the delay above runs from the map add, while the client is still loading; players get to see the hologram on
-        // board for at least this long
-        private const double HologramMinOnBoard = 10d;
+        // arrival, timed from a player's boarding (1.5 s after the client has loaded, under the intro text's black screen):
+        // the intro text (20 s from load) ends, the player "synchronises" into the simulation (green glow), the Caretaker's
+        // two story communicators play (10 s each) while the hologram talks, then Dawson comes out of the door where the
+        // hologram was
+        private static readonly TimeSpan IntroTextRemaining = TimeSpan.FromSeconds(TheHycrestInsurrectionMapScript.UseCinematicTextIntro ? 18.5 : 0);
+        private static readonly TimeSpan SyncGlowDelay      = IntroTextRemaining > TimeSpan.FromSeconds(1.5) ? IntroTextRemaining - TimeSpan.FromSeconds(1.5) : TimeSpan.Zero;
+        private static readonly TimeSpan Message1Delay      = IntroTextRemaining + TimeSpan.FromSeconds(0.5);
+        private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(10);
         private const uint DawsonPhase = 1u;
+
+        private const uint CaretakerMessage1          = 534606u;
+        private const uint CaretakerMessage2          = 534607u;
+        private const uint CaretakerMessageDurationMs = 10000u;
+
+        // the hologram is a Simple entity and doesn't animate by itself (retail: spell 63212 put a Caretaker disguise on
+        // an NPC); it talks (Default_Talk, 4 s) during each message
+        private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8)];
+
+        // Transimulator Synchronization (spell 62968) visuals only: green hologram overlay and the green Eldan teleporter
+        // effect (3 s). The spell itself also sets CC state DisableCinematic without a duration, so it isn't cast.
+        private const uint SyncHologramVisualEffect  = 20846u;
+        private const uint SyncTeleportVisualEffect  = 24604u;
+        private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
@@ -69,14 +86,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly ILogger<TheHycrestInsurrectionIntroEventScript> log;
         private readonly HycrestDialogue dialogue;
         private readonly IFactory<ISpellParameters> spellParametersFactory;
+        private readonly IStoryBuilder storyBuilder;
 
         public TheHycrestInsurrectionIntroEventScript(
             ILogger<TheHycrestInsurrectionIntroEventScript> log,
             IGameTableManager gameTableManager,
-            IFactory<ISpellParameters> spellParametersFactory)
+            IFactory<ISpellParameters> spellParametersFactory,
+            IStoryBuilder storyBuilder)
         {
             this.log                    = log;
             this.spellParametersFactory = spellParametersFactory;
+            this.storyBuilder           = storyBuilder;
             dialogue = new HycrestDialogue(gameTableManager);
         }
 
@@ -90,6 +110,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             publicEvent = owner;
             mapInstance = publicEvent.Map as IMapInstance;
             dropShip    = new HycrestDropShip(mapInstance, spellParametersFactory, log, actionQueue);
+            dropShip.BoardWithLoadingScreen = !TheHycrestInsurrectionMapScript.UseCinematicTextIntro;
+            dropShip.PlayerBoarded += OnPlayerBoarded;
 
             // spawns Vice-Marshal Dawson, objective 2113 is initial and completed by talking to him
             publicEvent.SetPhase(0u);
@@ -217,6 +239,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 if (arrived != null)
                     dropShip.Board(arrived);
             });
+        }
+
+        private void OnPlayerBoarded(IPlayer player)
+        {
+            uint guid = player.Guid;
+
+            actionQueue.Enqueue(SyncGlowDelay, () => WithPlayer(guid, PlaySync));
+            actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage1)));
+            actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayCaretakerMessage(p, CaretakerMessage2)));
 
             if (dawsonAppearQueued)
                 return;
@@ -225,15 +256,40 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             actionQueue.Enqueue(DawsonAppearDelay, ShowDawson);
         }
 
+        private void WithPlayer(uint guid, Action<IPlayer> action)
+        {
+            // the player may have left the map since the action was queued
+            IPlayer player = mapInstance.GetEntity<IPlayer>(guid);
+            if (player != null)
+                action(player);
+        }
+
+        private void PlaySync(IPlayer player)
+        {
+            uint hologram = HycrestDialogue.PlayVisualEffect(player, SyncHologramVisualEffect);
+            HycrestDialogue.PlayVisualEffect(player, SyncTeleportVisualEffect);
+
+            uint guid = player.Guid;
+            actionQueue.Enqueue(SyncDuration, () => WithPlayer(guid, p => HycrestDialogue.EndVisualEffect(p, hologram)));
+        }
+
+        private void PlayCaretakerMessage(IPlayer player, uint textId)
+        {
+            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs);
+
+            foreach (TimeSpan delay in HologramTalkTimes)
+            {
+                actionQueue.Enqueue(delay, () =>
+                {
+                    IWorldEntity hologram = mapInstance.GetEntity<IWorldEntity>(hologramGuid);
+                    if (hologram != null)
+                        HycrestDialogue.PlayVisualEffect(hologram, HycrestDialogue.TalkGestureVisualEffect);
+                });
+            }
+        }
+
         private void ShowDawson()
         {
-            double onBoard = dropShip.SinceFirstBoard ?? 0d;
-            if (onBoard < HologramMinOnBoard)
-            {
-                actionQueue.Enqueue(TimeSpan.FromSeconds(HologramMinOnBoard - onBoard), ShowDawson);
-                return;
-            }
-
             // the hologram makes way and Dawson (phase 1 spawn) appears in its place
             mapInstance.GetEntity<IWorldEntity>(hologramGuid)?.RemoveFromMap();
             hologramGuid = 0u;

@@ -96,6 +96,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public double? SinceFirstBoard { get; private set; }
 
+        /// <summary>
+        /// Show a loading screen for the boarding teleport; not needed while the intro text's black screen hides it.
+        /// </summary>
+        public bool BoardWithLoadingScreen { get; set; } = true;
+
+        /// <summary>
+        /// Invoked when a player has been put on board.
+        /// </summary>
+        public event Action<IPlayer> PlayerBoarded;
+
         public HycrestDropShip(IMapInstance map, IFactory<ISpellParameters> spellParametersFactory, ILogger log, TimedActionQueue actionQueue)
         {
             this.map                    = map;
@@ -239,7 +249,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
                     drop.Boarded = true;
                     SinceFirstBoard ??= 0d;
-                    player.TeleportToLocal(drop.Spot);
+                    player.TeleportToLocal(drop.Spot, BoardWithLoadingScreen);
+                    PlayerBoarded?.Invoke(player);
                     continue;
                 }
 
