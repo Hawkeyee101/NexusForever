@@ -17,8 +17,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     public partial class HycrestDialogue
     {
         // talking gesture for lines with $(self.visual=5701) in en-US.bin (visual 5701 plays Default_Talk, 278). Cinematic
-        // visual effects only show during a cinematic, so the gesture is the "talk" emote (238), also Default_Talk
-        public const uint TalkEmote = 238u;
+        // visual effects only show during a cinematic, so the gesture is an emote: 75, an NPC-only Default_Talk emote
+        // with stand state Emote (the player "talk" emote 238, stand state Stand, didn't show on the hologram)
+        public const uint TalkEmote = 75u;
 
         [GeneratedRegex(@"\$\(self\.visual=(\d+)\)")]
         private static partial Regex SelfVisualRegex();
@@ -77,7 +78,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             entity.EnqueueToVisible(new ServerEmote
             {
                 Guid       = entity.Guid,
-                StandState = StandState.Stand,
+                StandState = StandState.Emote,
                 EmoteId    = TalkEmote
             });
         }

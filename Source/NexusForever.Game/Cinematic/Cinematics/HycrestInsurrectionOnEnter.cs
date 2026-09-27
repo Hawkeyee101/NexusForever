@@ -29,12 +29,12 @@ namespace NexusForever.Game.Cinematic.Cinematics
 
         private const uint CinematicTimeline = 45237u; // plays Cinematic_Misc_00 (the whole timeline) on an actor
 
-        // retail: a black screen with the narration typed in. The camera's fade (transition type 3, as between shots in
-        // NoviceTutorialOnEnter) goes to black at once, holds under the narration and fades the view in as it ends
+        // retail: a black screen with the narration typed in. The camera's fade (transition type 1, the fade used by the
+        // start transition) goes to black at once, holds under the narration and fades the view in as it ends
         private const uint   FadeInAt       = 17500u;
         private const ushort BlackHold      = 17000;
         private const ushort BlackFadeIn    = 1500;
-        private const uint   FadeTransition = 3u;
+        private const uint   FadeTransition = 1u; // 3 (as between tutorial shots) faded through white
 
         // Transimulator Synchronization (spell 62968) visuals on the player as the view fades in: green hologram
         // overlay (3 s) and the green Eldan teleporter effect (3 s)
