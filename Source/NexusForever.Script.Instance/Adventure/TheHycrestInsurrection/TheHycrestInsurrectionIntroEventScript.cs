@@ -274,6 +274,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             dropShip.OpenDoors();
             shipDepartTimer = new UpdateTimer(ShipDepartDeadline);
 
+            // no door/walkway animation yet: players can't walk out of the closed ship, so everyone on board is moved
+            // just outside it and glides down with Rocket Fall
+            if (HycrestDropShip.ShipOpenVisualEffects.Length == 0)
+                dropShip.Depart();
+
             // every player in the instance has to gather in the barn, the client shows "Waiting for N more" from the max
             meetVesnaActive = true;
             publicEvent.ActivateObjective(PublicEventObjective.MeetVesnaTaranoft, GetPartySize());
