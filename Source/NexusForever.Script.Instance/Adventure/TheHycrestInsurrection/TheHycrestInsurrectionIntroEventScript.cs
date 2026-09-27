@@ -45,15 +45,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // arriving players are put on the ship's deck shortly after entering the map
         private static readonly TimeSpan BoardDelay = TimeSpan.FromSeconds(0.5);
 
-        // arrival, timed from a player's boarding (1.5 s after the client has loaded, under the intro text's black screen):
-        // the intro text (20 s from load, with the green "synchronisation" glow as it ends, see HycrestInsurrectionOnEnter)
-        // ends, the Caretaker's two story communicators play (10 s each) while the hologram talks, then Dawson comes out
-        // of the door where the hologram was
-        private static readonly TimeSpan IntroTextRemaining = TimeSpan.FromSeconds(TheHycrestInsurrectionMapScript.UseCinematicTextIntro ? 18.5 : 0);
+        // arrival, timed from the moment a player's client has finished loading: the narration's black screen (20 s,
+        // HycrestInsurrectionOnEnter; boarding happens under it once the ship has arrived) fades with the green
+        // "synchronisation" glow, the Caretaker's two story communicators play (10 s each) while the hologram talks, then
+        // Dawson comes out of the door where the hologram was
+        private static readonly TimeSpan IntroTextRemaining = TimeSpan.FromSeconds(TheHycrestInsurrectionMapScript.UseCinematicTextIntro ? 20 : 1.5);
         private static readonly TimeSpan Message1Delay      = IntroTextRemaining + TimeSpan.FromSeconds(0.5);
         private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(10);
         private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(10);
         private const uint DawsonPhase = 1u;
+        private static readonly TimeSpan DawsonTalkFallback = TimeSpan.FromSeconds(60);
 
         private const uint CaretakerMessage1          = 534606u;
         private const uint CaretakerMessage2          = 534607u;
@@ -117,7 +118,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             dropShip    = new HycrestDropShip(mapInstance, spellParametersFactory, log, actionQueue);
             dropShip.BoardWithLoadingScreen = !TheHycrestInsurrectionMapScript.UseCinematicTextIntro;
             dropShip.PlayerLoaded  += OnPlayerLoaded;
-            dropShip.PlayerBoarded += OnPlayerBoarded;
 
             // spawns Vice-Marshal Dawson, objective 2113 is initial and completed by talking to him
             publicEvent.SetPhase(0u);
@@ -166,9 +166,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     dropShip.ShipGuid = worldEntity.Guid;
                     break;
                 case PublicEventCreature.DominionDropship:
-                    // hovering, engines running
+                    // hovering, engines running; flies in from its start point before anyone is on board (the doors and
+                    // the hologram, spawned in the same batch, are registered by then)
                     dropShip.ShipGuid = worldEntity.Guid;
                     HycrestDropShip.SetState(worldEntity, StandState.State1);
+                    actionQueue.Enqueue(TimeSpan.FromSeconds(0.5), dropShip.FlyIn);
                     break;
                 case PublicEventCreature.DropshipDoorRight:
                     dropShip.RightDoorGuid = worldEntity.Guid;
@@ -261,10 +263,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // the narration on a black screen; it also hides the boarding teleport that follows
             if (TheHycrestInsurrectionMapScript.UseCinematicTextIntro)
                 player.CinematicManager.QueueCinematic(cinematicFactory.CreateCinematic<IHycrestInsurrectionOnEnter>());
-        }
 
-        private void OnPlayerBoarded(IPlayer player)
-        {
             uint guid = player.Guid;
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
@@ -275,10 +274,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             if (dawsonAppearQueued)
                 return;
 
-            // the ship flies from its start point to the hover point as the narration ends (~19 s for 94 m), carrying
-            // the players, and arrives before Dawson comes out
             dawsonAppearQueued = true;
-            actionQueue.Enqueue(IntroTextRemaining, dropShip.FlyIn);
             actionQueue.Enqueue(DawsonAppearDelay, ShowDawson);
         }
 
@@ -319,6 +315,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             hologramGuid = 0u;
 
             publicEvent.SetPhase(DawsonPhase);
+
+            // fallback: if nobody talks to Dawson (e.g. everyone fell off the ship), the briefing starts by itself
+            actionQueue.Enqueue(DawsonTalkFallback, () =>
+            {
+                IPublicEventObjective objective = publicEvent.GetTeams()
+                    .SelectMany(t => t.GetObjectives())
+                    .FirstOrDefault(o => o.Entry.Id == (uint)PublicEventObjective.ReportToDawson);
+                if (objective?.Status != PublicEventStatus.Active)
+                    return;
+
+                log.LogInformation("Hycrest: nobody talked to Dawson, starting the briefing.");
+                publicEvent.UpdateObjective(PublicEventObjective.ReportToDawson, 1);
+            });
         }
 
         private void UpdateBarnArrival()

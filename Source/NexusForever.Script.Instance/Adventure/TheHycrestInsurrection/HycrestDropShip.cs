@@ -88,6 +88,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         public bool FlewIn { get; private set; }
 
+        /// <summary>
+        /// The ship is at its hover point (flown in, or never had to). Players are only put on board then: carrying players
+        /// on a moving platform made them fall through the floor (27 Sep 2026).
+        /// </summary>
+        public bool Arrived { get; private set; }
+
         public bool DoorsOpen { get; private set; }
         public bool Departed { get; private set; }
 
@@ -175,8 +181,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Fly the ship from its start point to its hover point, with the players on board. The doors and the hologram
-        /// aren't attached to it (they aren't passengers), so they fly the same path at the same speed.
+        /// Fly the ship from its start point to its hover point, before anyone is on board (see <see cref="Arrived"/>).
+        /// The doors and the hologram aren't attached to it, so they fly the same path at the same speed.
         /// </summary>
         public void FlyIn()
         {
@@ -187,11 +193,20 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
             if (ship == null)
+            {
+                Arrived = true;
                 return;
+            }
 
             Vector3 delta = HycrestShipLayout.Origin - ship.Position;
             if (delta.Length() < 1f)
+            {
+                Arrived = true;
                 return;
+            }
+
+            // a moment of margin for the spline to settle before players are put on board
+            actionQueue.Enqueue(TimeSpan.FromSeconds(delta.Length() / HycrestShipLayout.FlyInSpeed + 0.5d), () => Arrived = true);
 
             foreach (uint guid in new[] { ShipGuid, RightDoorGuid, LeftDoorGuid, HologramGuid })
             {
@@ -277,6 +292,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     if (!player.CanTeleport())
                     {
                         drop.SinceLoaded = 0d;
+                        continue;
+                    }
+
+                    if (!Arrived)
+                    {
+                        // loaded, waiting under the narration's black screen for the ship to arrive
+                        if (drop.SinceLoaded == 0d)
+                            PlayerLoaded?.Invoke(player);
+                        drop.SinceLoaded = Math.Max(drop.SinceLoaded, BoardAfterLoad);
                         continue;
                     }
 
