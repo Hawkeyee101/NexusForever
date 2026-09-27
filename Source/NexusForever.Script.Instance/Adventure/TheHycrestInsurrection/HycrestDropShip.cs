@@ -9,8 +9,8 @@ using NexusForever.Shared;
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
     /// <summary>
-    /// The intro drop ship: tracks which players are on board, gives players who leave it the slow-burn jetpack
-    /// (Rocket Fall) until they land, opens the doors and sends the ship away.
+    /// The intro drop ship: boards arriving players, gives players who leave it the slow-burn jetpack (Rocket Fall)
+    /// until they land, and sends the ship away.
     /// </summary>
     public class HycrestDropShip
     {
@@ -24,17 +24,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private class PlayerDrop
         {
             public DropState State;
+            public bool OnPlatformConfirmed;
+            public bool ReachedDeck;
             public double SinceCast;
             public float SampleY;
             public double SinceSample;
         }
 
         // Rocket Fall: GravityMultiplier 0.1 and no fall damage for 3 s, jetpack/flame visuals
+        // re-applied just before it runs out so there is no gap
         private const uint RocketFallSpell = 47734u;
-        private const double RocketFallRecast = 2.5d;
+        private const double RocketFallRecast = 2.9d;
 
-        // deck height from the deck points 50008/50009/50021/50022; a player more than LeaveDistance below it left the ship
-        private const float DeckY = -819.6f;
+        // fallback when the platform attachment isn't reported: a player this far below the deck has left the ship
         private const float LeaveDistance = 3f;
 
         // landed: moved less than LandedMaxDrop vertically within LandedWindow; a window is used because position
@@ -42,11 +44,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const float LandedMaxDrop = 0.3f;
         private const double LandedWindow = 1d;
 
-        // anyone still on board when the ship leaves is moved just outside it, towards the barn, and glides down
-        private static readonly Vector3 DropPoint = new(-2537.9f, -826f, -1100f);
-
-        // the ship climbs away north over the hills and is removed once it's out of sight
-        private static readonly Vector3 DepartOffset = new(0f, 80f, 250f);
+        // the ship climbs away south over the fields and is removed once it's out of sight
+        private static readonly Vector3 DepartOffset = new(0f, 80f, -250f);
         private const float DepartSpeed = 25f;
         private static readonly TimeSpan DepartRemoveDelay = TimeSpan.FromSeconds(12);
 
@@ -56,6 +55,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly TimedActionQueue actionQueue;
 
         private readonly Dictionary<uint, PlayerDrop> players = [];
+        private int nextSpot;
 
         public uint ShipGuid { get; set; }
         public List<uint> DoorGuids { get; } = [];
@@ -73,10 +73,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
+        /// Put <paramref name="player"/> on the ship's deck, unless the ship has already left.
+        /// </summary>
+        /// <remarks>
+        /// The group finder entrance has to be a WorldLocation2 point and there is none on the moved ship, so arriving
+        /// players are teleported onto the deck.
+        /// </remarks>
+        public void Board(IPlayer player)
+        {
+            if (Departed)
+                return;
+
+            Vector3 spot = HycrestShipLayout.PlayerSpots[nextSpot++ % HycrestShipLayout.PlayerSpots.Length];
+            players[player.Guid] = new PlayerDrop
+            {
+                State   = DropState.OnBoard,
+                SampleY = spot.Y
+            };
+
+            player.TeleportToLocal(spot, false);
+        }
+
+        /// <summary>
         /// Open the ship's doors so players can jump out.
         /// </summary>
         /// <remarks>
-        /// The door entities are platforms without an open state in the engine, so opening removes them.
+        /// Door entities, if any, are platforms without an open state in the engine, so opening removes them.
         /// </remarks>
         public void OpenDoors()
         {
@@ -110,7 +132,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     continue;
 
                 StartFalling(player, drop);
-                player.TeleportToLocal(DropPoint, false);
+                player.TeleportToLocal(HycrestShipLayout.DropPoint, false);
             }
 
             map.GetEntity<IWorldEntity>(DawsonGuid)?.RemoveFromMap();
@@ -140,30 +162,44 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             foreach (IPlayer player in map.GetPlayers())
             {
-                float y = player.Position.Y;
                 if (!players.TryGetValue(player.Guid, out PlayerDrop drop))
-                {
-                    // players arriving on the deck start on board, anyone else (GM teleport, ground entrance) doesn't
-                    drop = new PlayerDrop
-                    {
-                        State   = !Departed && y > DeckY - LeaveDistance ? DropState.OnBoard : DropState.Landed,
-                        SampleY = y
-                    };
-                    players.Add(player.Guid, drop);
                     continue;
-                }
 
                 switch (drop.State)
                 {
                     case DropState.OnBoard:
-                        if (y < DeckY - LeaveDistance)
-                            StartFalling(player, drop);
+                        UpdateOnBoard(player, drop);
                         break;
                     case DropState.Falling:
-                        UpdateFalling(player, drop, y, lastTick);
+                        UpdateFalling(player, drop, player.Position.Y, lastTick);
                         break;
                 }
             }
+        }
+
+        private void UpdateOnBoard(IPlayer player, PlayerDrop drop)
+        {
+            // the client reports the platform it stands on; once the player has stood on the ship, stepping off it is
+            // leaving the ship, detected on the next tick
+            bool onShip = ShipGuid != 0u && player.MovementManager.GetPlatform() == ShipGuid;
+            if (onShip)
+            {
+                drop.OnPlatformConfirmed = true;
+                drop.ReachedDeck         = true;
+                return;
+            }
+
+            // right after boarding the teleport hasn't completed yet and the position is still on the ground
+            float y = player.Position.Y;
+            if (!drop.ReachedDeck)
+            {
+                if (y > HycrestShipLayout.DeckY - 1f)
+                    drop.ReachedDeck = true;
+                return;
+            }
+
+            if (drop.OnPlatformConfirmed || y < HycrestShipLayout.DeckY - LeaveDistance)
+                StartFalling(player, drop);
         }
 
         private void StartFalling(IPlayer player, PlayerDrop drop)

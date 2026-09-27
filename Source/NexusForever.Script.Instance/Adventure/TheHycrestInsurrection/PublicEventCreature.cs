@@ -10,6 +10,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         AyitaSinnatus     = 48032,
         LysionSinnatus    = 17777,
         ExitSimulation    = 36869,
-        TheCaretaker      = 53309
+        TheCaretaker      = 53309,
+        CaretakerHologram = 56685
     }
 }

@@ -20,7 +20,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     {
         // development aid: after the intro, walking into the Abandoned Barn again restarts the mission vote
         // set to false once missions follow each other properly
-        public const bool AllowVoteRetest = true;
+        public const bool AllowVoteRetest = false;
         public const uint VoteRetestTriggerId = 114901u;
         private const float VoteRetestTriggerRange = 8f;
         private static readonly Vector3 VoteRetestTriggerPosition = new(-2526.80f, -925.82f, -1190.93f);

@@ -41,6 +41,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // (189 starts right after the briefing, so leaving "when 189 starts" would push everyone off at once)
         private static readonly TimeSpan ShipDepartDeadline = TimeSpan.FromSeconds(30);
 
+        // arriving players are put on the ship's deck shortly after entering the map
+        private static readonly TimeSpan BoardDelay = TimeSpan.FromSeconds(0.5);
+
+        // retail: the Caretaker's hologram stands in the ship; after the Caretaker's two messages (2 s and 12 s after
+        // arriving, 10 s each) Dawson comes out of the door where the hologram was
+        private static readonly TimeSpan DawsonAppearDelay = TimeSpan.FromSeconds(22);
+        private const uint DawsonPhase = 1u;
+
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
 
@@ -53,6 +61,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private HycrestDropShip dropShip;
         private UpdateTimer shipDepartTimer;
         private uint dawsonGuid;
+        private uint hologramGuid;
+        private bool dawsonAppearQueued;
 
         #region Dependency Injection
 
@@ -120,6 +130,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 {
                     if (meetVesnaActive)
                         publicEvent.SetObjectiveDynamicMax(PublicEventObjective.MeetVesnaTaranoft, GetPartySize(joining: player));
+
+                    OnPlayerArrival(player);
                     break;
                 }
                 case IWorldEntity worldEntity:
@@ -142,6 +154,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 case PublicEventCreature.ViceMarshalDawson:
                     dawsonGuid          = worldEntity.Guid;
                     dropShip.DawsonGuid = worldEntity.Guid;
+                    break;
+                case PublicEventCreature.CaretakerHologram:
+                    hologramGuid = worldEntity.Guid;
                     break;
             }
         }
@@ -206,6 +221,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             foreach ((TimeSpan delay, uint textId) in DawsonBriefing)
                 actionQueue.Enqueue(delay, () => dialogue.Say(mapInstance.GetEntity<IWorldEntity>(dawsonGuid), textId, gesture: false));
+        }
+
+        private void OnPlayerArrival(IPlayer player)
+        {
+            uint guid = player.Guid;
+            actionQueue.Enqueue(BoardDelay, () =>
+            {
+                IPlayer arrived = mapInstance.GetEntity<IPlayer>(guid);
+                if (arrived != null)
+                    dropShip.Board(arrived);
+            });
+
+            if (dawsonAppearQueued)
+                return;
+
+            dawsonAppearQueued = true;
+            actionQueue.Enqueue(DawsonAppearDelay, ShowDawson);
+        }
+
+        private void ShowDawson()
+        {
+            // the hologram makes way and Dawson (phase 1 spawn) appears in its place
+            mapInstance.GetEntity<IWorldEntity>(hologramGuid)?.RemoveFromMap();
+            hologramGuid = 0u;
+
+            publicEvent.SetPhase(DawsonPhase);
         }
 
         private void UpdateBarnArrival()
