@@ -183,7 +183,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     dropShip.DawsonGuid = worldEntity.Guid;
                     break;
                 case PublicEventCreature.CaretakerHologram:
-                    hologramGuid = worldEntity.Guid;
+                    hologramGuid          = worldEntity.Guid;
+                    dropShip.HologramGuid = worldEntity.Guid;
                     break;
             }
         }
@@ -274,7 +275,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             if (dawsonAppearQueued)
                 return;
 
+            // the ship flies from its start point to the hover point as the narration ends (~19 s for 94 m), carrying
+            // the players, and arrives before Dawson comes out
             dawsonAppearQueued = true;
+            actionQueue.Enqueue(IntroTextRemaining, dropShip.FlyIn);
             actionQueue.Enqueue(DawsonAppearDelay, ShowDawson);
         }
 

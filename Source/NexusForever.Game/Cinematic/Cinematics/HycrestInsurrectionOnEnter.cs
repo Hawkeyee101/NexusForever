@@ -1,6 +1,8 @@
 using System.Numerics;
 using NexusForever.Game.Abstract.Cinematic;
 using NexusForever.Game.Abstract.Cinematic.Cinematics;
+using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Map.Search;
 using NexusForever.Network.World.Entity;
 
 namespace NexusForever.Game.Cinematic.Cinematics
@@ -28,6 +30,12 @@ namespace NexusForever.Game.Cinematic.Cinematics
         private const float SetAngle = 0f;
 
         private const uint CinematicTimeline = 45237u; // plays Cinematic_Misc_00 (the whole timeline) on an actor
+
+        // retail: as everyone appears, the whole ship glows green (synchronisation); the players get the spell outside the
+        // cinematic, the ship (a platform, it can't be a spell target here) gets the green hologram overlay of spell 62968
+        private const uint ShipCreature             = 17722u;
+        private const uint SyncHologramVisualEffect = 20846u;
+        private const uint SyncDuration             = 3000u;
 
         // retail: a black screen with the narration typed in. The camera's fade goes to black at once, holds under the
         // narration and fades the view in as it ends. The green synchronisation glow follows outside the cinematic, like
@@ -58,10 +66,36 @@ namespace NexusForever.Game.Cinematic.Cinematics
             view.AddAttach(12933, 9);
             AddCamera(view);
 
+            IWorldEntity ship = Player.Map?
+                .Search(Player.Position, 300f, new CreatureSearchCheck(ShipCreature))
+                .FirstOrDefault();
+            if (ship != null)
+            {
+                Keyframes.Add("ShipSynchronisation",
+                [
+                    new VisualEffect(SyncHologramVisualEffect, ship.Guid, initialDelay: FadeInAt, duration: SyncDuration)
+                ]);
+            }
+
             AddText(683169, 500, 4500);
             AddText(683170, 4700, 8700);
             AddText(683171, 8900, 12700);
             AddText(683172, 12900, 17000);
+        }
+
+        private class CreatureSearchCheck : ISearchCheck<IWorldEntity>
+        {
+            private readonly uint creatureId;
+
+            public CreatureSearchCheck(uint creatureId)
+            {
+                this.creatureId = creatureId;
+            }
+
+            public bool CheckEntity(IWorldEntity entity)
+            {
+                return entity.CreatureId == creatureId;
+            }
         }
     }
 }

@@ -7,8 +7,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// (Instance/Adventure/The Hycrest Insurrection.sql).
     /// </summary>
     /// <remarks>
-    /// The ship is the Dominion Imperium Transport 17722 (confirmed against the retail videos), (door entities 18338/28509 exist for its
-    /// always-open doorways; not used at the moment). Offsets were measured in game on summoned copies
+    /// The ship is the Dominion Imperium Transport 17722 (confirmed against the retail videos), with the door entities
+    /// 18338 and 28509 over its always-open doorways, like retail. Offsets were measured in game on summoned copies
     /// (27 Sep 2026) and are in the ship's own frame (right ramp along +X, doorway at -17 m); a yaw r turns a local
     /// offset (x, z) into world (x cos r + z sin r, -x sin r + z cos r). The ship is turned -90 degrees so the right ramp
     /// points north and its lower end touches down in front of the Abandoned Barn.
@@ -22,6 +22,29 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public static readonly Vector3 Origin = new(-2537.821f, -865.644f, -1245.569f);
         public const float Yaw = -1.5708f;
+
+        /// <summary>
+        /// Where the ship spawns before flying in to <see cref="Origin"/> with the players on board: above the start point
+        /// measured in game (-2543.603, -921.8223, -1151.4386), north of the barn, at the same altitude.
+        /// </summary>
+        public static readonly Vector3 StartPoint = new(-2543.603f, -865.644f, -1151.4386f);
+        public const float FlyInSpeed = 5f;
+
+        /// <summary>
+        /// Departure ("jump away", State2): the ship moves forward and up. ASSUMPTION: the cockpit is at the ship's -Z end,
+        /// which is east (+X) with the ship turned -90 degrees.
+        /// </summary>
+        public static readonly Vector3 DepartOffset = new(250f, 80f, 0f);
+        public const float DepartSpeed = 20f;
+
+        /// <summary>
+        /// Return <paramref name="hoverPosition"/> (a spot given for the ship at <see cref="Origin"/>) for the ship at
+        /// <paramref name="shipPosition"/>; the ship keeps its rotation while flying.
+        /// </summary>
+        public static Vector3 OnShip(Vector3 hoverPosition, Vector3 shipPosition)
+        {
+            return hoverPosition - Origin + shipPosition;
+        }
 
         /// <summary>
         /// Height of the ship's interior floor (3.69 m below the ship's position).
@@ -45,8 +68,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public static readonly Vector3 DawsonSpot = new(-2519.001f, -869.264f, -1246.529f);
         public const float DawsonYaw = 1.5913f;
 
-        // door entities (18338/28509) would stand here (centre line, 13.28 m forward, 3.28 m down), turned like the ship;
-        // not spawned at the moment (testing whether the ship's own states close its doors)
+        // both door entities (18338/28509) stand here (centre line, 13.28 m forward, 3.28 m down), turned like the ship;
+        // 28509 covers the exit doorway (right ramp)
         public static readonly Vector3 DoorPoint = new(-2524.541f, -868.924f, -1245.439f);
 
         // the right ramp, the exit: its top at the doorway, its lower end above the spot in front of the barn
