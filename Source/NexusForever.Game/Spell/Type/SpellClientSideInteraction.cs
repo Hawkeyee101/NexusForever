@@ -72,7 +72,11 @@ namespace NexusForever.Game.Spell.Type
         {
             Execute();
 
-            if (Parameters.SpellInfo.Effects.FirstOrDefault(x => x.EffectType == SpellEffectType.Activate) == null)
+            // the Activate effect reports success; it can't apply to an activated entity that isn't a unit (e.g. an
+            // instance portal), so report success here for those too
+            bool activateEffect = Parameters.SpellInfo.Effects.FirstOrDefault(x => x.EffectType == SpellEffectType.Activate) != null;
+            bool unitTarget     = Parameters.PrimaryTargetId == 0 || Caster.GetVisible<IGridEntity>(Parameters.PrimaryTargetId) is IUnitEntity;
+            if (!activateEffect || !unitTarget)
                 Parameters.ClientSideInteraction?.HandleSuccess(this);
         }
 

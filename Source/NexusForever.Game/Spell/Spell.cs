@@ -525,8 +525,8 @@ namespace NexusForever.Game.Spell
             // Add Targeted Entity with the appropriate SpellEffectTargetFlags.
             if (Parameters.PrimaryTargetId > 0)
             {
-                IUnitEntity explicitTargetEntity = Caster.GetVisible<IUnitEntity>(Parameters.PrimaryTargetId);
-                if (explicitTargetEntity != null)
+                // the explicit target can be an entity that isn't a unit (e.g. an instance portal activated by the player)
+                if (Caster.GetVisible<IGridEntity>(Parameters.PrimaryTargetId) is IUnitEntity explicitTargetEntity)
                     executionContext.TargetCollection.AddTarget(SpellEffectTargetFlags.ExplicitTarget, explicitTargetEntity);
             }
             else
