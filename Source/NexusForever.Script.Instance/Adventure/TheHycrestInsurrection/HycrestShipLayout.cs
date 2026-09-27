@@ -8,10 +8,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// </summary>
     /// <remarks>
     /// The ship is the intro set ship (creature 70557, spawned as a platform), confirmed in game: its interior matches
-    /// the retail videos. Horizontal offsets come from the retail WorldLocation2 points around the set origin 49984
-    /// (identity rotation): player spots 50008/50009/50022, Dawson's spot 50021, the end of the walkway 50011. Those
-    /// points stand ~4.54 m above 49984 (Dawson's spot); in game the floor is 1.38 m above the ship's spawn position,
-    /// so heights are taken relative to the measured floor. The ship keeps the identity rotation so the offsets stay valid.
+    /// the retail videos. Positions inside were measured in game with !entity info (27 Sep 2026). The ship has two folded
+    /// walkways built in, one on each side; in retail only the right one (+X) extends, and that is the exit.
     /// </remarks>
     public static class HycrestShipLayout
     {
@@ -21,44 +19,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const float BarnDoorwayGroundY = -929.1575f;
         private const float SpawnOffsetY = 4.54f;
 
-        // measured in game 27 Sep 2026: standing on the interior floor at Y -872.3211, 1.38 m above the spawn position
-        private const float FloorOffsetY = 1.38f;
-
-        // height of the retail interior points above the set origin 49984 that corresponds to the floor (Dawson's 50021)
-        private const float RetailFloorOffsetY = 4.54f;
-
         public static readonly Vector3 Origin = new(-2520.6f, BarnDoorwayGroundY + DeckHeightAboveGround - SpawnOffsetY, -1240f);
 
         /// <summary>
-        /// Height of the ship's interior floor.
+        /// Height of the ship's interior floor, measured at four spots (-873.70 to -873.82).
         /// </summary>
-        public static readonly float FloorY = Origin.Y + FloorOffsetY;
+        public const float FloorY = -873.76f;
 
-        // player spots inside the ship, offsets of 50008, 50009, 50022 from 49984, 1 m above the floor: the floor was
-        // measured 14 m away, arrivals must not start inside it
-        private const float PlayerSpotAboveFloor = 1f;
-
+        // player arrival spot, measured (+0.5 m so arrivals don't start in the floor); more spots for party members to follow
         public static readonly Vector3[] PlayerSpots =
         [
-            new(Origin.X - 2.02f, FloorY + PlayerSpotAboveFloor, Origin.Z - 2.59f),
-            new(Origin.X - 3.51f, FloorY + PlayerSpotAboveFloor, Origin.Z - 0.08f),
-            new(Origin.X - 2.05f, FloorY + PlayerSpotAboveFloor, Origin.Z - 2.67f)
+            new(-2516.7417f, -873.8232f + 0.5f, -1233.5726f)
         ];
 
-        // ESTIMATE, to be measured: in front of the door with the red light strip, where the Caretaker hologram stands
-        // and Dawson comes out (offset of 50021)
-        public static readonly Vector3 DawsonSpot = Interior(-6.55f, 4.54f, -1.51f);
-        public const float DawsonYaw = -0.3093f;
+        // in front of the door with the red light strip, facing into the room: the Caretaker hologram, measured
+        public static readonly Vector3 HologramSpot = new(-2521.1797f, -873.81055f, -1244.1765f);
+        public const float HologramYaw = -3.1174135f;
 
-        // ESTIMATE, to be measured: the end of the extended walkway, where players jump off (offset of 50011, facing out, -Z)
-        public static readonly Vector3 JumpPoint = Interior(-0.66f, 5.42f, -25.77f);
+        // Dawson's spot, measured
+        public static readonly Vector3 DawsonSpot = new(-2524.8179f, -873.7381f, -1243.8883f);
+        public const float DawsonYaw = -2.81273f;
 
-        // anyone still on board when the ship leaves is moved just past the end of the walkway and glides down
-        public static readonly Vector3 DropPoint = JumpPoint + new Vector3(0f, 1f, -3f);
+        // in front of the right-side walkway, the exit (facing out, +X), measured
+        public static readonly Vector3 ExitWalkway = new(-2513.4956f, -873.69946f, -1241.1969f);
 
-        private static Vector3 Interior(float x, float retailY, float z)
-        {
-            return new Vector3(Origin.X + x, FloorY + (retailY - RetailFloorOffsetY), Origin.Z + z);
-        }
+        // anyone still on board when the ship leaves is moved just outside the right side of the hull (the ship is 63 m
+        // wide, its +X side at ~-2489) and glides down; ESTIMATE until the extended walkway's end is known
+        public static readonly Vector3 DropPoint = new(-2483.5f, FloorY + 1f, ExitWalkway.Z);
     }
 }

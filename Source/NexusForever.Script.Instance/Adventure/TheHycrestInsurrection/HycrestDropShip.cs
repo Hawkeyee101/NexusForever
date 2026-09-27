@@ -62,8 +62,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // the door and the walkway are part of the Set Ship model (70557), not separate entities. The model has no
         // active prop states, only the intro cinematic's sequences on one timeline: Cinematic_Misc_01 (3.3-9.3 s),
         // Cinematic_Misc_02 (9.3-19.6 s), Cinematic_Misc_03 (19.7-26.3 s). In Misc_02 its two animated parts move from
-        // their hidden rest position onto the deck and one slides ~23 m out (10.0-12.1 s): most likely the walkway
-        // extending, with the door. Candidates: 11097 plays Misc_02 and holds (flags 4); 19807 (Misc_02 one-shot), 11098
+        // their hidden rest position onto the deck and one slides ~23 m along the ship's X axis (10.0-12.1 s): most likely
+        // the right-side walkway (+X, the only one that extends in retail) extending. Candidates: 11097 plays Misc_02 and holds (flags 4); 19807 (Misc_02 one-shot), 11098
         // (Misc_03), 45237 (Misc_00, all). DISABLED: playing 11097 while standing in the ship put the player in an empty
         // void (27 Sep 2026 18:48), so the animation moves the ship model/collision away. Test only from the ground
         // ("!entity modify visual <id> 70557"). While empty, the ship departs as soon as the doors "open".
