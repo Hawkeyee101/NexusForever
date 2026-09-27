@@ -28,12 +28,23 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             public DropState State;
             public Vector3 Spot;
             public bool Boarded;
+            public double SinceLoaded;
+            public double SinceBoarded;
             public bool OnPlatformConfirmed;
             public bool ReachedDeck;
             public double SinceCast;
             public float SampleY;
             public double SinceSample;
         }
+
+        // boarding waits this long after the client has finished loading the map (it can teleport again), and the
+        // teleport shows a loading screen; teleporting in the same tick as ClientEnteredWorld left a client in an empty
+        // void once (27 Sep 2026)
+        private const double BoardAfterLoad = 1.5d;
+
+        // after boarding, position and platform reports are ignored this long: reports sent before the client applied
+        // the teleport (e.g. still falling from the login position) must not count as leaving the ship
+        private const double BoardGracePeriod = 2d;
 
         // Rocket Fall: GravityMultiplier 0.1 and no fall damage for 3 s, jetpack/flame visuals
         // re-applied just before it runs out so there is no gap
@@ -215,17 +226,27 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     }
 
                     if (!player.CanTeleport())
+                    {
+                        drop.SinceLoaded = 0d;
+                        continue;
+                    }
+
+                    drop.SinceLoaded += lastTick;
+                    if (drop.SinceLoaded < BoardAfterLoad)
                         continue;
 
                     drop.Boarded = true;
                     SinceFirstBoard ??= 0d;
-                    player.TeleportToLocal(drop.Spot, false);
+                    player.TeleportToLocal(drop.Spot);
                     continue;
                 }
 
                 switch (drop.State)
                 {
                     case DropState.OnBoard:
+                        drop.SinceBoarded += lastTick;
+                        if (drop.SinceBoarded < BoardGracePeriod)
+                            break;
                         UpdateOnBoard(player, drop);
                         break;
                     case DropState.Falling:

@@ -34,12 +34,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public static readonly float FloorY = Origin.Y + FloorOffsetY;
 
-        // player spots inside the ship, offsets of 50008, 50009, 50022 from 49984 (+0.5 m so arrivals don't clip the floor)
+        // player spots inside the ship, offsets of 50008, 50009, 50022 from 49984, 1 m above the floor: the floor was
+        // measured 14 m away, arrivals must not start inside it
+        private const float PlayerSpotAboveFloor = 1f;
+
         public static readonly Vector3[] PlayerSpots =
         [
-            Interior(-2.02f, 4.30f, -2.59f) + new Vector3(0f, 0.5f, 0f),
-            Interior(-3.51f, 4.54f, -0.08f) + new Vector3(0f, 0.5f, 0f),
-            Interior(-2.05f, 4.95f, -2.67f) + new Vector3(0f, 0.5f, 0f)
+            new(Origin.X - 2.02f, FloorY + PlayerSpotAboveFloor, Origin.Z - 2.59f),
+            new(Origin.X - 3.51f, FloorY + PlayerSpotAboveFloor, Origin.Z - 0.08f),
+            new(Origin.X - 2.05f, FloorY + PlayerSpotAboveFloor, Origin.Z - 2.67f)
         ];
 
         // ESTIMATE, to be measured: in front of the door with the red light strip, where the Caretaker hologram stands
