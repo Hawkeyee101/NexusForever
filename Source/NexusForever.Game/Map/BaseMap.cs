@@ -48,6 +48,11 @@ namespace NexusForever.Game.Map
 
         protected readonly ConcurrentQueue<IGridAction> pendingActions = new();
 
+        // latest target of each entity with a queued movement relocation (relocations without a callback); moving entities
+        // relocate every tick, so without coalescing a busy map queues more relocations than it processes per update and
+        // every other grid action (like removing a player who changes map) waits behind an ever growing backlog
+        private readonly ConcurrentDictionary<IGridEntity, Vector3> pendingRelocations = new();
+
         private readonly QueuedCounter entityCounter = new();
         protected readonly Dictionary<uint /*guid*/, IGridEntity> entities = new();
         private IEntityCache entityCache;
@@ -125,8 +130,12 @@ namespace NexusForever.Game.Map
                         }
                         case IGridActionRelocate actionRelocate:
                         {
-                            RelocateEntity(actionRelocate.Entity, actionRelocate.Vector);
-                            actionRelocate.Callback?.Invoke(actionRelocate.Vector);
+                            Vector3 vector = actionRelocate.Vector;
+                            if (actionRelocate.Callback == null && pendingRelocations.TryRemove(actionRelocate.Entity, out Vector3 latest))
+                                vector = latest;
+
+                            RelocateEntity(actionRelocate.Entity, vector);
+                            actionRelocate.Callback?.Invoke(vector);
                             break;
                         }
                         case IGridActionRemove actionRemove:
@@ -283,6 +292,16 @@ namespace NexusForever.Game.Map
         /// </summary>
         public void EnqueueRelocate(IGridEntity entity, Vector3 position, OnRelocateDelegate callback = null)
         {
+            // coalesce movement relocations: while one is queued for the entity only its target is updated
+            if (callback == null)
+            {
+                if (!pendingRelocations.TryAdd(entity, position))
+                {
+                    pendingRelocations[entity] = position;
+                    return;
+                }
+            }
+
             pendingActions.Enqueue(new GridActionRelocate
             {
                 Entity   = entity,
