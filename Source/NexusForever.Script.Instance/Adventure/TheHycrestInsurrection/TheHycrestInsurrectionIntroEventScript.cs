@@ -44,6 +44,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // retail: the Caretaker's hologram stands in the ship; after the Caretaker's two messages (2 s and 12 s after
         // arriving, 10 s each) Dawson comes out of the door where the hologram was
         private static readonly TimeSpan DawsonAppearDelay = TimeSpan.FromSeconds(22);
+
+        // the delay above runs from the map add, while the client is still loading; players get to see the hologram on
+        // board for at least this long
+        private const double HologramMinOnBoard = 10d;
         private const uint DawsonPhase = 1u;
 
         private IPublicEvent publicEvent;
@@ -130,6 +134,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             switch ((PublicEventCreature)worldEntity.CreatureId)
             {
+                case PublicEventCreature.IntroSetShip:
                 case PublicEventCreature.DominionDropship:
                     dropShip.ShipGuid = worldEntity.Guid;
                     break;
@@ -222,6 +227,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void ShowDawson()
         {
+            double onBoard = dropShip.SinceFirstBoard ?? 0d;
+            if (onBoard < HologramMinOnBoard)
+            {
+                actionQueue.Enqueue(TimeSpan.FromSeconds(HologramMinOnBoard - onBoard), ShowDawson);
+                return;
+            }
+
             // the hologram makes way and Dawson (phase 1 spawn) appears in its place
             mapInstance.GetEntity<IWorldEntity>(hologramGuid)?.RemoveFromMap();
             hologramGuid = 0u;

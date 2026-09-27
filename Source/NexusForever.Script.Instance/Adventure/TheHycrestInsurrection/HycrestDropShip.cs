@@ -4,6 +4,8 @@ using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static.Entity.Movement.Spline;
+using NexusForever.Network.World.Entity;
+using NexusForever.Network.World.Message.Model;
 using NexusForever.Shared;
 
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
@@ -46,6 +48,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const float LandedMaxDrop = 0.3f;
         private const double LandedWindow = 1d;
 
+        // the door and the walkway are part of the Set Ship model (70557), not separate entities. The model has no
+        // active prop states, only the intro cinematic's sequences on one timeline: Cinematic_Misc_01 (3.3-9.3 s),
+        // Cinematic_Misc_02 (9.3-19.6 s), Cinematic_Misc_03 (19.7-26.3 s). In Misc_02 its two animated parts move from
+        // their hidden rest position onto the deck and one slides ~23 m out (10.0-12.1 s): most likely the walkway
+        // extending, with the door. ESTIMATE, to be confirmed in game with "!entity modify visual <id> 70557":
+        // 11097 plays Misc_02 and holds (flags 4); alternatives 19807 (Misc_02 one-shot), 11098 (Misc_03), 45237 (Misc_00, all)
+        public static readonly uint[] ShipOpenVisualEffects = [11097u];
+
         // the ship climbs away south over the fields and is removed once it's out of sight
         private static readonly Vector3 DepartOffset = new(0f, 80f, -250f);
         private const float DepartSpeed = 25f;
@@ -59,6 +69,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // keyed by character id: a teleport within the map removes and re-adds the player, possibly with a new guid
         private readonly Dictionary<ulong, PlayerDrop> players = [];
         private int nextSpot;
+        private uint visualHandle = 0x48440000u;
 
         public uint ShipGuid { get; set; }
         public List<uint> DoorGuids { get; } = [];
@@ -66,6 +77,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         public bool DoorsOpen { get; private set; }
         public bool Departed { get; private set; }
+
+        /// <summary>
+        /// Seconds since the first player was put on board (the client had finished loading), null until then.
+        /// </summary>
+        public double? SinceFirstBoard { get; private set; }
 
         public HycrestDropShip(IMapInstance map, IFactory<ISpellParameters> spellParametersFactory, ILogger log, TimedActionQueue actionQueue)
         {
@@ -98,10 +114,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Open the ship's doors so players can jump out.
+        /// Open the ship's doors and extend the walkway so players can walk out and jump.
         /// </summary>
         /// <remarks>
-        /// Door entities, if any, are platforms without an open state in the engine, so opening removes them.
+        /// The Set Ship's door and walkway are animated in its model, see <see cref="ShipOpenVisualEffects"/>. Separate door
+        /// entities (the Dominion Dropship's) are platforms without an open state in the engine, so they are removed.
         /// </remarks>
         public void OpenDoors()
         {
@@ -109,9 +126,28 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             DoorsOpen = true;
+
+            IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
+            if (ship != null)
+            {
+                foreach (uint visualEffectId in ShipOpenVisualEffects)
+                {
+                    ship.EnqueueToVisible(new ServerCinematicVisualEffect
+                    {
+                        VisualHandle      = visualHandle++,
+                        VisualEffectId    = visualEffectId,
+                        UnitId            = ship.Guid,
+                        Position          = new Position(ship.Position),
+                        RemoveOnCameraEnd = false
+                    });
+                }
+            }
+
             foreach (uint guid in DoorGuids)
                 map.GetEntity<IWorldEntity>(guid)?.RemoveFromMap();
             DoorGuids.Clear();
+
+            log.LogInformation($"Hycrest: drop ship doors opened (visual effects {string.Join(", ", ShipOpenVisualEffects)}).");
         }
 
         /// <summary>
@@ -161,6 +197,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public void Update(double lastTick)
         {
+            if (SinceFirstBoard.HasValue)
+                SinceFirstBoard += lastTick;
+
             foreach (IPlayer player in map.GetPlayers())
             {
                 if (!players.TryGetValue(player.CharacterId, out PlayerDrop drop))
@@ -179,6 +218,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                         continue;
 
                     drop.Boarded = true;
+                    SinceFirstBoard ??= 0d;
                     player.TeleportToLocal(drop.Spot, false);
                     continue;
                 }
@@ -211,12 +251,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             float y = player.Position.Y;
             if (!drop.ReachedDeck)
             {
-                if (y > HycrestShipLayout.DeckY - 1f)
+                if (y > HycrestShipLayout.FloorY - 1f)
                     drop.ReachedDeck = true;
                 return;
             }
 
-            if (drop.OnPlatformConfirmed || y < HycrestShipLayout.DeckY - LeaveDistance)
+            if (drop.OnPlatformConfirmed || y < HycrestShipLayout.FloorY - LeaveDistance)
                 StartFalling(player, drop);
         }
 
