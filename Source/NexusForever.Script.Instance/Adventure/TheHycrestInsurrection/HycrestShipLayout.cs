@@ -28,7 +28,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// measured in game (-2543.603, -921.8223, -1151.4386), north of the barn, at the same altitude.
         /// </summary>
         public static readonly Vector3 StartPoint = new(-2543.603f, -865.644f, -1151.4386f);
-        public const float FlyInSpeed = 5f;
+        public const float FlyInSpeed = 7f;
 
         /// <summary>
         /// Departure ("jump away", State2): the ship moves forward and up. ASSUMPTION: the cockpit is at the ship's -Z end,

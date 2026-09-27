@@ -12,8 +12,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     {
         public override uint PublicEventId => HycrestPublicEvent.Main;
 
-        // arrival: the intro event script puts players on board behind a loading screen and shows the Caretaker's
-        // narration as centred story text (retail showed it on a black screen; a cinematic's black hid the text, see
+        // arrival: the intro event script shows a black screen (arrival cinematic) while the ship flies in and players are
+        // put on board, then the Caretaker's narration as centred story text (a cinematic hides story text, see
         // HYCREST.md). A proper arrival cinematic (camera in the ship) is a later option.
 
         private const uint NighttimeSkyboxSpell = 27236u;

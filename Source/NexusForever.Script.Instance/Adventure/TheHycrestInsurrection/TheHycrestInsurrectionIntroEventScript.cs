@@ -1,6 +1,8 @@
 using System.Numerics;
 using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract;
+using NexusForever.Game.Abstract.Cinematic;
+using NexusForever.Game.Abstract.Cinematic.Cinematics;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
@@ -44,11 +46,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // arriving players are put on the ship's deck shortly after entering the map
         private static readonly TimeSpan BoardDelay = TimeSpan.FromSeconds(0.5);
 
-        // arrival, timed from a player being put on board (1.5 s after the client has loaded, behind a loading screen):
-        // the green "synchronisation" glow, then the Caretaker's narration as centred story text (retail's typed-in text,
-        // 8 s each) while the hologram talks, then Dawson comes out of the door where the hologram was
-        private static readonly TimeSpan SyncDelay          = TimeSpan.FromSeconds(0.5);
-        private static readonly TimeSpan Message1Delay      = TimeSpan.FromSeconds(2);
+        // arrival, timed from the moment a player's client has finished loading: a black screen (the arrival cinematic,
+        // 20 s) covers the ship flying in and the boarding teleport; then the green "synchronisation" glow, the Caretaker's
+        // narration as centred story text (retail's typed-in text, 8 s each; a cinematic hides story text, so it follows
+        // the black screen) while the hologram talks, then Dawson comes out of the door where the hologram was
+        private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan SyncDelay          = BlackScreen;
+        private static readonly TimeSpan Message1Delay      = BlackScreen + TimeSpan.FromSeconds(1.5);
         private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(8.5);
         private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(9);
         private const uint DawsonPhase = 1u;
@@ -91,16 +95,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly HycrestDialogue dialogue;
         private readonly IFactory<ISpellParameters> spellParametersFactory;
         private readonly IStoryBuilder storyBuilder;
+        private readonly ICinematicFactory cinematicFactory;
 
         public TheHycrestInsurrectionIntroEventScript(
             ILogger<TheHycrestInsurrectionIntroEventScript> log,
             IGameTableManager gameTableManager,
             IFactory<ISpellParameters> spellParametersFactory,
-            IStoryBuilder storyBuilder)
+            IStoryBuilder storyBuilder,
+            ICinematicFactory cinematicFactory)
         {
             this.log                    = log;
             this.spellParametersFactory = spellParametersFactory;
             this.storyBuilder           = storyBuilder;
+            this.cinematicFactory       = cinematicFactory;
             dialogue = new HycrestDialogue(gameTableManager, actionQueue);
         }
 
@@ -114,7 +121,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             publicEvent = owner;
             mapInstance = publicEvent.Map as IMapInstance;
             dropShip    = new HycrestDropShip(mapInstance, spellParametersFactory, log, actionQueue);
-            dropShip.PlayerBoarded += OnPlayerBoarded;
+            dropShip.BoardWithLoadingScreen = false; // the black screen hides it
+            dropShip.PlayerLoaded += OnPlayerLoaded;
 
             // spawns Vice-Marshal Dawson, objective 2113 is initial and completed by talking to him
             publicEvent.SetPhase(0u);
@@ -255,9 +263,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             });
         }
 
-        private void OnPlayerBoarded(IPlayer player)
+        private void OnPlayerLoaded(IPlayer player)
         {
             uint guid = player.Guid;
+
+            player.CinematicManager.QueueCinematic(cinematicFactory.CreateCinematic<IHycrestInsurrectionOnEnter>());
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
             actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
