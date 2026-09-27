@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Numerics;
 using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Entity;
@@ -28,10 +29,18 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Entity
 
         #endregion
 
+        // the client can send an interaction for any visible entity (e.g. while falling past it); objectives are only
+        // credited within this distance
+        private const float ObjectiveInteractionRange = 15f;
+
         public void HandleMessage(IWorldSession session, ClientEntityInteract entityInteraction)
         {
             IWorldEntity entity = session.Player.GetVisible<IWorldEntity>(entityInteraction.Guid);
-            if (entity != null)
+            if (entity != null && Vector3.Distance(session.Player.Position, entity.Position) > ObjectiveInteractionRange)
+            {
+                log.LogTrace($"Ignored objective credit for interaction with entity {entity.Guid} (creature {entity.CreatureId}), {Vector3.Distance(session.Player.Position, entity.Position):0.0} m away.");
+            }
+            else if (entity != null)
             {
                 session.Player.QuestManager.ObjectiveUpdate(QuestObjectiveType.ActivateEntity, entity.CreatureId, 1u);
                 session.Player.QuestManager.ObjectiveUpdate(QuestObjectiveType.TalkTo, entity.CreatureId, 1u);
