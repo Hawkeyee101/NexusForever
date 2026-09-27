@@ -26,24 +26,29 @@ namespace NexusForever.Game.Spell.Effect.Handler
 
         public SpellEffectExecutionResult Apply(ISpellExecutionContext executionContext, IUnitEntity target, ISpellTargetEffectInfo info, ISpellEffectSpellForceRemoveData data)
         {
+            // the spell executing this effect can match its own filter (e.g. the Hycrest skybox spells remove every spell
+            // in their shared group before applying their own sky), it must only remove the other spells
             switch (data.Type)
             {
                 case SpellEffectForceSpellRemoveType.SpellGroupId:
                 {
-                    foreach (ISpell spellToRemove in target.GetSpellsByGroupId(data.Data))
-                        spellToRemove.Finish();
+                    foreach (ISpell spellToRemove in target.GetSpellsByGroupId(data.Data).ToList())
+                        if (spellToRemove != executionContext.Spell)
+                            spellToRemove.Finish();
                     break;
                 }
                 case SpellEffectForceSpellRemoveType.Spell4:
                 {
                     ISpell spellToRemove = target.GetSpellBySpellId(data.Data);
-                    spellToRemove?.Finish();
+                    if (spellToRemove != executionContext.Spell)
+                        spellToRemove?.Finish();
                     break;
                 }
                 case SpellEffectForceSpellRemoveType.SpellBase:
                 {
                     ISpell spellToRemove = target.GetSpellByBaseSpellId(data.Data);
-                    spellToRemove?.Finish();
+                    if (spellToRemove != executionContext.Spell)
+                        spellToRemove?.Finish();
                     break;
                 }
                 default:
