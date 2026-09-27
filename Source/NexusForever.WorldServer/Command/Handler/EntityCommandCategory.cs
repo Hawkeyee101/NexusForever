@@ -56,22 +56,9 @@ namespace NexusForever.WorldServer.Command.Handler
                 uint? creatureId)
             {
                 // the VisualEffect table isn't loaded by the server (no [GameData]), so the id isn't validated
-                IWorldEntity entity;
-                if (creatureId.HasValue)
-                {
-                    IWorldEntity invoker = context.Invoker;
-                    entity = invoker.Map
-                        .Search(invoker.Position, 300f, new CreatureSearchCheck(creatureId.Value))
-                        .OrderBy(e => Vector3.DistanceSquared(e.Position, invoker.Position))
-                        .FirstOrDefault();
-                    if (entity == null)
-                    {
-                        context.SendMessage($"No entity with creature id {creatureId.Value} within 300 m!");
-                        return;
-                    }
-                }
-                else
-                    entity = context.GetTargetOrInvoker<IWorldEntity>();
+                IWorldEntity entity = FindEntity(context, creatureId);
+                if (entity == null)
+                    return;
 
                 entity.EnqueueToVisible(new ServerCinematicVisualEffect
                 {
@@ -83,6 +70,45 @@ namespace NexusForever.WorldServer.Command.Handler
                 }, true);
 
                 context.SendMessage($"Played visual effect {visualEffectId} on entity {entity.Guid} (creature {entity.CreatureId}).");
+            }
+
+            // local dev aid (not for upstream): set the stand state like DoorEntity does, which plays a prop's
+            // AP_State transitions (e.g. doors: State0 closed, State1 open)
+            [Command(Permission.EntityModify, "Set the stand state of the target, or of the nearest entity with the given creature id.", "standstate")]
+            public void HandleEntityModifyStandState(ICommandContext context,
+                [Parameter("Stand state, e.g. State0, State1, State2.", converter: typeof(EnumParameterConverter<StandState>))]
+                StandState standState,
+                [Parameter("Optional creature id: use the nearest entity with this creature id instead of the target.")]
+                uint? creatureId)
+            {
+                IWorldEntity entity = FindEntity(context, creatureId);
+                if (entity == null)
+                    return;
+
+                entity.StandState = standState;
+                entity.EnqueueToVisible(new ServerEmote
+                {
+                    Guid       = entity.Guid,
+                    StandState = standState
+                }, true);
+
+                context.SendMessage($"Set stand state {standState} on entity {entity.Guid} (creature {entity.CreatureId}).");
+            }
+
+            private static IWorldEntity FindEntity(ICommandContext context, uint? creatureId)
+            {
+                if (!creatureId.HasValue)
+                    return context.GetTargetOrInvoker<IWorldEntity>();
+
+                IWorldEntity invoker = context.Invoker;
+                IWorldEntity entity = invoker.Map
+                    .Search(invoker.Position, 300f, new CreatureSearchCheck(creatureId.Value))
+                    .OrderBy(e => Vector3.DistanceSquared(e.Position, invoker.Position))
+                    .FirstOrDefault();
+                if (entity == null)
+                    context.SendMessage($"No entity with creature id {creatureId.Value} within 300 m!");
+
+                return entity;
             }
 
             private class CreatureSearchCheck : ISearchCheck<IWorldEntity>
