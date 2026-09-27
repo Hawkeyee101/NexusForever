@@ -1,6 +1,8 @@
 using System.Numerics;
 using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract;
+using NexusForever.Game.Abstract.Cinematic;
+using NexusForever.Game.Abstract.Cinematic.Cinematics;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
@@ -80,16 +82,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly HycrestDialogue dialogue;
         private readonly IFactory<ISpellParameters> spellParametersFactory;
         private readonly IStoryBuilder storyBuilder;
+        private readonly ICinematicFactory cinematicFactory;
 
         public TheHycrestInsurrectionIntroEventScript(
             ILogger<TheHycrestInsurrectionIntroEventScript> log,
             IGameTableManager gameTableManager,
             IFactory<ISpellParameters> spellParametersFactory,
-            IStoryBuilder storyBuilder)
+            IStoryBuilder storyBuilder,
+            ICinematicFactory cinematicFactory)
         {
             this.log                    = log;
             this.spellParametersFactory = spellParametersFactory;
             this.storyBuilder           = storyBuilder;
+            this.cinematicFactory       = cinematicFactory;
             dialogue = new HycrestDialogue(gameTableManager);
         }
 
@@ -104,6 +109,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             mapInstance = publicEvent.Map as IMapInstance;
             dropShip    = new HycrestDropShip(mapInstance, spellParametersFactory, log, actionQueue);
             dropShip.BoardWithLoadingScreen = !TheHycrestInsurrectionMapScript.UseCinematicTextIntro;
+            dropShip.PlayerLoaded  += OnPlayerLoaded;
             dropShip.PlayerBoarded += OnPlayerBoarded;
 
             // spawns Vice-Marshal Dawson, objective 2113 is initial and completed by talking to him
@@ -240,6 +246,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 if (arrived != null)
                     dropShip.Board(arrived);
             });
+        }
+
+        private void OnPlayerLoaded(IPlayer player)
+        {
+            // the narration on a black screen; it also hides the boarding teleport that follows
+            if (TheHycrestInsurrectionMapScript.UseCinematicTextIntro)
+                player.CinematicManager.QueueCinematic(cinematicFactory.CreateCinematic<IHycrestInsurrectionOnEnter>());
         }
 
         private void OnPlayerBoarded(IPlayer player)

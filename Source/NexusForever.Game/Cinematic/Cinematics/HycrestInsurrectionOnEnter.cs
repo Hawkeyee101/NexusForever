@@ -22,14 +22,19 @@ namespace NexusForever.Game.Cinematic.Cinematics
     {
         private const uint ActorCamera = 70555u; // GC217 - Hycrest Adventure Intro - Camera
 
-        // intro set ship spawn (HycrestShipLayout.Origin, world database), identity rotation
+        // GC217 set origin: where the intro set ship (70557) used to spawn, identity rotation; only the final fade-in
+        // shows the camera's view
         private static readonly Vector3 SetOrigin = new(-2520.6f, -873.6975f, -1240f);
         private const float SetAngle = 0f;
 
         private const uint CinematicTimeline = 45237u; // plays Cinematic_Misc_00 (the whole timeline) on an actor
 
-        // the screen stays black until the start transition fades the view in, as the narration ends
-        private const uint FadeInAt = 17500u;
+        // retail: a black screen with the narration typed in. The camera's fade (transition type 3, as between shots in
+        // NoviceTutorialOnEnter) goes to black at once, holds under the narration and fades the view in as it ends
+        private const uint   FadeInAt       = 17500u;
+        private const ushort BlackHold      = 17000;
+        private const ushort BlackFadeIn    = 1500;
+        private const uint   FadeTransition = 3u;
 
         // Transimulator Synchronization (spell 62968) visuals on the player as the view fades in: green hologram
         // overlay (3 s) and the green Eldan teleporter effect (3 s)
@@ -44,18 +49,17 @@ namespace NexusForever.Game.Cinematic.Cinematics
             InitialCancelMode = 2;
             CinematicId       = 0;
 
-            StartTransition = new Transition(FadeInAt, 1, 2, 1500, 0, 1500);
+            StartTransition = new Transition(0, 1, 2, 1500, 0, 1500);
             EndTransition   = new Transition(Duration - 1500, 0, 0);
 
             var origin = new Position(SetOrigin);
             IActor camera = new Actor(ActorCamera, 6, SetAngle, origin);
             AddActor(camera, [new VisualEffect(CinematicTimeline)]);
 
-            ICamera view = new Camera(camera, 7, 0, true, 0);
+            ICamera view = new Camera(camera, 7, 0, true, FadeTransition, 0, BlackHold, BlackFadeIn);
+            // shot changes without their own transition (a cut could end the black hold early)
             view.AddAttach(6000, 8);
-            view.AddTransition(6000, 0);
             view.AddAttach(12933, 9);
-            view.AddTransition(12933, 0);
             AddCamera(view);
 
             AddText(683169, 500, 4500);

@@ -15,7 +15,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public override uint PublicEventId => HycrestPublicEvent.Main;
 
         // retail: arriving players see the Caretaker's narration (683169-683172) on a black screen, which also hides
-        // the move onto the ship; the Caretaker's story communicators follow (intro event script, after boarding)
+        // the move onto the ship; the Caretaker's story communicators follow. Both are played by the intro event script,
+        // the narration once the client has finished loading (a cinematic sent during loading isn't shown)
         public const bool UseCinematicTextIntro = true;
 
         private const uint NighttimeSkyboxSpell = 27236u;
@@ -30,14 +31,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         #region Dependency Injection
 
         private readonly IFactory<ISpellParameters> spellParametersFactory;
-        private readonly ICinematicFactory cinematicFactory;
 
         public TheHycrestInsurrectionMapScript(
-            IFactory<ISpellParameters> spellParametersFactory,
-            ICinematicFactory cinematicFactory)
+            IFactory<ISpellParameters> spellParametersFactory)
         {
             this.spellParametersFactory = spellParametersFactory;
-            this.cinematicFactory       = cinematicFactory;
         }
 
         #endregion
@@ -70,9 +68,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 parameters.PrimaryTargetId = p.Guid;
                 p.CastSpell(NighttimeSkyboxSpell, parameters);
             }));
-
-            if (UseCinematicTextIntro)
-                player.CinematicManager.QueueCinematic(cinematicFactory.CreateCinematic<IHycrestInsurrectionOnEnter>());
         }
 
         private void WithPlayer(uint guid, Action<IPlayer> action)

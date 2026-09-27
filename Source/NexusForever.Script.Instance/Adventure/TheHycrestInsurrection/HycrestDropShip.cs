@@ -40,7 +40,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // boarding waits this long after the client has finished loading the map (it can teleport again), and the
         // teleport shows a loading screen; teleporting in the same tick as ClientEnteredWorld left a client in an empty
         // void once (27 Sep 2026)
-        private const double BoardAfterLoad = 1.5d;
+        public const double BoardAfterLoad = 1.5d;
 
         // after boarding, position and platform reports are ignored this long: reports sent before the client applied
         // the teleport (e.g. still falling from the login position) must not count as leaving the ship
@@ -96,6 +96,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// Show a loading screen for the boarding teleport; not needed while the intro text's black screen hides it.
         /// </summary>
         public bool BoardWithLoadingScreen { get; set; } = true;
+
+        /// <summary>
+        /// Invoked when a player waiting to board has finished loading the map (the boarding teleport follows after
+        /// <see cref="BoardAfterLoad"/>).
+        /// </summary>
+        public event Action<IPlayer> PlayerLoaded;
 
         /// <summary>
         /// Invoked when a player has been put on board.
@@ -231,6 +237,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                         drop.SinceLoaded = 0d;
                         continue;
                     }
+
+                    if (drop.SinceLoaded == 0d)
+                        PlayerLoaded?.Invoke(player);
 
                     drop.SinceLoaded += lastTick;
                     if (drop.SinceLoaded < BoardAfterLoad)
