@@ -6,6 +6,7 @@ using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.PublicEvent;
 using NexusForever.Game.Abstract.Spell;
+using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
 using NexusForever.Script.Template;
@@ -149,12 +150,20 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             switch ((PublicEventCreature)worldEntity.CreatureId)
             {
                 case PublicEventCreature.IntroSetShip:
-                case PublicEventCreature.DominionDropship:
                     dropShip.ShipGuid = worldEntity.Guid;
                     break;
+                case PublicEventCreature.DominionDropship:
+                    // hovering, engines running
+                    dropShip.ShipGuid = worldEntity.Guid;
+                    HycrestDropShip.SetState(worldEntity, StandState.State1);
+                    break;
                 case PublicEventCreature.DropshipDoorRight:
+                    dropShip.RightDoorGuid = worldEntity.Guid;
+                    HycrestDropShip.SetState(worldEntity, StandState.State0);
+                    break;
                 case PublicEventCreature.DropshipDoorLeft:
-                    dropShip.DoorGuids.Add(worldEntity.Guid);
+                    dropShip.LeftDoorGuid = worldEntity.Guid;
+                    HycrestDropShip.SetState(worldEntity, StandState.State0);
                     break;
                 case PublicEventCreature.ViceMarshalDawson:
                     dawsonGuid          = worldEntity.Guid;
@@ -308,14 +317,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void StartMeetVesna()
         {
-            // the briefing is over: open the doors, players jump out themselves with the slow-burn jetpack
+            // the briefing is over: the right door opens, players walk down the ramp and jump
             dropShip.OpenDoors();
             shipDepartTimer = new UpdateTimer(ShipDepartDeadline);
-
-            // no door/walkway animation yet: players can't walk out of the closed ship, so everyone on board is moved
-            // just outside it and glides down with Rocket Fall
-            if (HycrestDropShip.ShipOpenVisualEffects.Length == 0)
-                dropShip.Depart();
 
             // every player in the instance has to gather in the barn, the client shows "Waiting for N more" from the max
             meetVesnaActive = true;

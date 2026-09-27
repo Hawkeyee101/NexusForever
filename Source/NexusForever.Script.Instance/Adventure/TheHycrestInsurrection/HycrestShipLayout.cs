@@ -7,44 +7,51 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// (Instance/Adventure/The Hycrest Insurrection.sql).
     /// </summary>
     /// <remarks>
-    /// The ship is the intro set ship (creature 70557, spawned as a platform), confirmed in game: its interior matches
-    /// the retail videos. Positions inside were measured in game with !entity info (27 Sep 2026). The ship has two folded
-    /// walkways built in, one on each side; in retail only the right one (+X) extends, and that is the exit.
+    /// The ship is the Dominion Imperium Transport 17722 (confirmed against the retail videos), with the door entities
+    /// 18338 (right) and 28509 (left) over its always-open doorways. Offsets were measured in game on summoned copies
+    /// (27 Sep 2026) and are in the ship's own frame (right ramp along +X, doorway at -17 m); a yaw r turns a local
+    /// offset (x, z) into world (x cos r + z sin r, -x sin r + z cos r). The ship is turned -90 degrees so the right ramp
+    /// points north and its lower end touches down in front of the Abandoned Barn.
     /// </remarks>
     public static class HycrestShipLayout
     {
-        // barn doorway measured in game: -2520.6, -929.1575, -1223.0962, facing out of the barn (-Z)
-        // the ship hovers in front of it so players land on open ground in front of the door, not on the barn roof
-        public const float DeckHeightAboveGround = 60f;
-        private const float BarnDoorwayGroundY = -929.1575f;
-        private const float SpawnOffsetY = 4.54f;
-
-        public static readonly Vector3 Origin = new(-2520.6f, BarnDoorwayGroundY + DeckHeightAboveGround - SpawnOffsetY, -1240f);
+        /// <summary>
+        /// The ship's position; the right ramp's lower end (15.60, -9.23, -17.19) touches down in front of the barn at
+        /// (-2520.6306, -929.33386, -1229.9689), measured.
+        /// </summary>
+        public static readonly Vector3 Origin = new(-2537.821f, -920.104f, -1245.569f);
+        public const float Yaw = -1.5708f;
 
         /// <summary>
-        /// Height of the ship's interior floor, measured at four spots (-873.70 to -873.82).
+        /// Height of the ship's interior floor (3.69 m below the ship's position).
         /// </summary>
-        public const float FloorY = -873.76f;
+        public const float FloorY = -923.794f;
 
-        // player arrival spot, measured (+0.5 m so arrivals don't start in the floor); more spots for party members to follow
+        // arrival spots, measured (+0.5 m so arrivals don't start in the floor); one per party member, the sixth is spare
         public static readonly Vector3[] PlayerSpots =
         [
-            new(-2516.7417f, -873.8232f + 0.5f, -1233.5726f)
+            new(-2525.451f, -923.794f + 0.5f, -1243.369f),
+            new(-2527.751f, -923.374f + 0.5f, -1244.049f),
+            new(-2531.051f, -922.794f + 0.5f, -1244.999f),
+            new(-2530.411f, -922.774f + 0.5f, -1247.769f),
+            new(-2526.551f, -923.844f + 0.5f, -1247.689f),
+            new(-2523.891f, -923.804f + 0.5f, -1248.039f)
         ];
 
-        // in front of the door with the red light strip, facing into the room: the Caretaker hologram, measured
-        public static readonly Vector3 HologramSpot = new(-2521.1797f, -873.81055f, -1244.1765f);
-        public const float HologramYaw = -3.1174135f;
+        // in front of the door with the red light strip, where the Caretaker hologram stands, and Dawson's spot, measured
+        public static readonly Vector3 HologramSpot = new(-2520.181f, -923.794f, -1245.839f);
+        public const float HologramYaw = 1.6108f;
+        public static readonly Vector3 DawsonSpot = new(-2519.001f, -923.724f, -1246.529f);
+        public const float DawsonYaw = 1.5913f;
 
-        // Dawson's spot, measured
-        public static readonly Vector3 DawsonSpot = new(-2524.8179f, -873.7381f, -1243.8883f);
-        public const float DawsonYaw = -2.81273f;
+        // both door entities stand at this point (on the ship's centre line, 13.28 m forward, 3.28 m down), turned like the ship
+        public static readonly Vector3 DoorPoint = new(-2524.541f, -923.384f, -1245.439f);
 
-        // in front of the right-side walkway, the exit (facing out, +X), measured
-        public static readonly Vector3 ExitWalkway = new(-2513.4956f, -873.69946f, -1241.1969f);
+        // the right ramp, the exit: its top at the doorway and its lower end on the ground in front of the barn
+        public static readonly Vector3 RampTop = new(-2520.771f, -923.144f, -1239.249f);
+        public static readonly Vector3 RampEnd = new(-2520.631f, -929.334f, -1229.969f);
 
-        // anyone still on board when the ship leaves is moved just outside the right side of the hull (the ship is 63 m
-        // wide, its +X side at ~-2489) and glides down; ESTIMATE until the extended walkway's end is known
-        public static readonly Vector3 DropPoint = new(-2483.5f, FloorY + 1f, ExitWalkway.Z);
+        // anyone still on board when the ship leaves is moved to the foot of the ramp
+        public static readonly Vector3 DropPoint = RampEnd + new Vector3(0f, 0.5f, 1f);
     }
 }

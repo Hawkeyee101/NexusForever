@@ -3,8 +3,7 @@ using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.Spell;
-using NexusForever.Game.Static.Entity.Movement.Spline;
-using NexusForever.Network.World.Entity;
+using NexusForever.Game.Static.Entity;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Shared;
 
@@ -65,20 +64,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const double MinFallTime   = 5d;
         private const double MaxFallTime   = 120d;
 
-        // the door and the walkway are part of the Set Ship model (70557), not separate entities. The model has no
-        // active prop states, only the intro cinematic's sequences on one timeline: Cinematic_Misc_01 (3.3-9.3 s),
-        // Cinematic_Misc_02 (9.3-19.6 s), Cinematic_Misc_03 (19.7-26.3 s). In Misc_02 its two animated parts move from
-        // their hidden rest position onto the deck and one slides ~23 m along the ship's X axis (10.0-12.1 s): most likely
-        // the right-side walkway (+X, the only one that extends in retail) extending. Candidates: 11097 plays Misc_02 and holds (flags 4); 19807 (Misc_02 one-shot), 11098
-        // (Misc_03), 45237 (Misc_00, all). DISABLED: playing 11097 while standing in the ship put the player in an empty
-        // void (27 Sep 2026 18:48), so the animation moves the ship model/collision away. Test only from the ground
-        // ("!entity modify visual <id> 70557"). While empty, the ship departs as soon as the doors "open".
-        public static readonly uint[] ShipOpenVisualEffects = [];
-
-        // the ship climbs away south over the fields and is removed once it's out of sight
-        private static readonly Vector3 DepartOffset = new(0f, 80f, -250f);
-        private const float DepartSpeed = 25f;
-        private static readonly TimeSpan DepartRemoveDelay = TimeSpan.FromSeconds(12);
+        // the Imperium Transport (17722) always spawns with both doorways open and its ramps out; like retail, the door
+        // entities (Right 18338, Left 28509, platforms) close the doorways. States are driven like DoorEntity (StandState
+        // stat + emote, the models' AP_State sequences): ship State1 hovering (engines shake), State2 "jump away" (13 s);
+        // doors State0 closed, State1 open. Only the right door opens, the left one stays closed.
+        private static readonly TimeSpan DepartRemoveDelay = TimeSpan.FromSeconds(14);
 
         private readonly IMapInstance map;
         private readonly IFactory<ISpellParameters> spellParametersFactory;
@@ -88,10 +78,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // keyed by character id: a teleport within the map removes and re-adds the player, possibly with a new guid
         private readonly Dictionary<ulong, PlayerDrop> players = [];
         private int nextSpot;
-        private uint visualHandle = 0x48440000u;
 
         public uint ShipGuid { get; set; }
-        public List<uint> DoorGuids { get; } = [];
+        public uint RightDoorGuid { get; set; }
+        public uint LeftDoorGuid { get; set; }
         public uint DawsonGuid { get; set; }
 
         public bool DoorsOpen { get; private set; }
@@ -143,44 +133,37 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Open the ship's doors and extend the walkway so players can walk out and jump.
+        /// Set the stand state of <paramref name="entity"/>, which plays its model's AP_State transition, like <c>DoorEntity</c>.
         /// </summary>
-        /// <remarks>
-        /// The Set Ship's door and walkway are animated in its model, see <see cref="ShipOpenVisualEffects"/>. Separate door
-        /// entities (the Dominion Dropship's) are platforms without an open state in the engine, so they are removed.
-        /// </remarks>
+        public static void SetState(IWorldEntity entity, StandState state)
+        {
+            if (entity == null)
+                return;
+
+            entity.StandState = state;
+            entity.EnqueueToVisible(new ServerEmote
+            {
+                Guid       = entity.Guid,
+                StandState = state
+            });
+        }
+
+        /// <summary>
+        /// Open the right door so players can walk down the ramp and jump; the left door stays closed.
+        /// </summary>
         public void OpenDoors()
         {
             if (DoorsOpen)
                 return;
 
             DoorsOpen = true;
+            SetState(map.GetEntity<IWorldEntity>(RightDoorGuid), StandState.State1);
 
-            IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
-            if (ship != null)
-            {
-                foreach (uint visualEffectId in ShipOpenVisualEffects)
-                {
-                    ship.EnqueueToVisible(new ServerCinematicVisualEffect
-                    {
-                        VisualHandle      = visualHandle++,
-                        VisualEffectId    = visualEffectId,
-                        UnitId            = ship.Guid,
-                        Position          = new Position(ship.Position),
-                        RemoveOnCameraEnd = false
-                    });
-                }
-            }
-
-            foreach (uint guid in DoorGuids)
-                map.GetEntity<IWorldEntity>(guid)?.RemoveFromMap();
-            DoorGuids.Clear();
-
-            log.LogInformation($"Hycrest: drop ship doors opened (visual effects {string.Join(", ", ShipOpenVisualEffects)}).");
+            log.LogInformation("Hycrest: drop ship right door opened.");
         }
 
         /// <summary>
-        /// Send the ship away. Players still on board get Rocket Fall and are moved to the drop point first.
+        /// Send the ship away ("jump away", State2). Players still on board are moved to the drop point first.
         /// </summary>
         public void Depart()
         {
@@ -203,11 +186,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             map.GetEntity<IWorldEntity>(DawsonGuid)?.RemoveFromMap();
 
-            IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
-            if (ship == null)
-                return;
+            // the doors don't belong to the ship model and would stay behind in the air
+            map.GetEntity<IWorldEntity>(RightDoorGuid)?.RemoveFromMap();
+            map.GetEntity<IWorldEntity>(LeftDoorGuid)?.RemoveFromMap();
 
-            ship.MovementManager.SetPositionPath([ship.Position, ship.Position + DepartOffset], SplineType.Linear, SplineMode.OneShot, DepartSpeed);
+            SetState(map.GetEntity<IWorldEntity>(ShipGuid), StandState.State2);
             actionQueue.Enqueue(DepartRemoveDelay, () => map.GetEntity<IWorldEntity>(ShipGuid)?.RemoveFromMap());
 
             log.LogInformation("Hycrest: drop ship departed.");
