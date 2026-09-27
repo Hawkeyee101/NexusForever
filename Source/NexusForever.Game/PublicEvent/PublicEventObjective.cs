@@ -72,7 +72,11 @@ namespace NexusForever.Game.PublicEvent
             if (failureTimer.HasElapsed)
             {
                 failureTimer = null;
-                SetStatus(PublicEventStatus.Failed);
+
+                // timed wait objectives (waiting for an NPC to finish speaking, an animation or an event) succeed when
+                // the timer ends, any other timed objective fails
+                SetStatus(Entry.PublicEventObjectiveTypeEnum == PublicEventObjectiveType.TimedWin
+                    ? PublicEventStatus.Succeeded : PublicEventStatus.Failed);
             }
         }
 

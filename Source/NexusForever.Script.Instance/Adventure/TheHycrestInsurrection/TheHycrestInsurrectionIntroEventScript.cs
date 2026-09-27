@@ -26,9 +26,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const float BarnTriggerRange = 8f;
         private static readonly Vector3 BarnTriggerPosition = new(-2526.80f, -925.82f, -1190.93f);
 
-        // objective 2155 is a TimedWin, the script completes it just before the engine failure timer (FailureTimeMs) would fail it
-        private static readonly TimeSpan BriefingMargin = TimeSpan.FromMilliseconds(500);
-
         // Vice-Marshal Dawson's briefing, spoken to the whole ship during the 20 s objective 2155
         private static readonly (TimeSpan Delay, uint TextId)[] DawsonBriefing =
         [
@@ -52,7 +49,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
 
-        private UpdateTimer briefingTimer;
         private readonly TimedActionQueue actionQueue = new();
         private IVolumeGridTriggerEntity barnTrigger;
         private bool meetVesnaActive;
@@ -107,16 +103,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             dropShip.Update(lastTick);
             UpdateShipDeparture(lastTick);
             UpdateBarnArrival();
-
-            if (briefingTimer == null)
-                return;
-
-            briefingTimer.Update(lastTick);
-            if (!briefingTimer.HasElapsed)
-                return;
-
-            briefingTimer = null;
-            publicEvent.UpdateObjective(PublicEventObjective.ListenToDawson, 1);
         }
 
         /// <summary>
@@ -210,14 +196,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void StartBriefing()
         {
+            // 2155 is a TimedWin: the engine completes it when its timer (FailureTimeMs, 20 s) ends
             publicEvent.ActivateObjective(PublicEventObjective.ListenToDawson);
-
-            IPublicEventObjective objective = publicEvent.GetTeams()
-                .SelectMany(t => t.GetObjectives())
-                .FirstOrDefault(o => o.Entry.Id == (uint)PublicEventObjective.ListenToDawson);
-
-            TimeSpan duration = TimeSpan.FromMilliseconds(objective?.Entry.FailureTimeMs ?? 20000u) - BriefingMargin;
-            briefingTimer = new UpdateTimer(duration);
 
             foreach ((TimeSpan delay, uint textId) in DawsonBriefing)
                 actionQueue.Enqueue(delay, () => dialogue.Say(mapInstance.GetEntity<IWorldEntity>(dawsonGuid), textId, gesture: false));
