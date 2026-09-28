@@ -116,6 +116,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly TimeSpan TimeOfDayJoinDelay = TimeSpan.FromSeconds(1);
         private uint? timeOfDay;
 
+        // a time of day change is due: the barn doors stay closed until it has been sent
+        private bool timeOfDayPending;
+
         // barn doors (retail video): no door while the doorway is open; closing spawns the barn's door (its own phase of
         // the main event), opening removes it, no animation
         private static readonly Dictionary<uint, uint> BarnDoorPhases = new()
@@ -191,7 +194,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             openDoorsWait += lastTick;
-            if (openDoorsWait < MinDoorOpenDelay.TotalSeconds
+            // never before the new time of day is set, nor before the mission has everything on the map
+            if (timeOfDayPending
+                || openDoorsWait < MinDoorOpenDelay.TotalSeconds
                 || !openDoorsFor.HasFinished && openDoorsFor.GetEntities().Any(e => !e.InWorld))
                 return;
 
@@ -406,7 +411,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             // after the regroup scene the story moves on to the next morning
             if (voteId == 46u)
+            {
+                timeOfDayPending = true;
                 SetTimeOfDay(MorningTimeOfDay);
+            }
 
             // outcome line from the track's spokesperson, the mission's story communicator, then the mission
             // a vote that times out finishes during the public event manager update, creating an event there would modify
@@ -521,6 +529,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             timeOfDay = secondsSinceMidnight;
             foreach (IPlayer player in mapInstance.GetPlayers())
                 SendTimeOfDay(player, secondsSinceMidnight);
+            timeOfDayPending = false;
             log.LogInformation($"Hycrest: time of day set to {TimeSpan.FromSeconds(secondsSinceMidnight):hh\\:mm}.");
         }
 
