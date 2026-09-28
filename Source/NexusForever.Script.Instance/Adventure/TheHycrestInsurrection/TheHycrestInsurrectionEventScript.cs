@@ -10,6 +10,7 @@ using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
+using NexusForever.Network.World.Message.Model;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter;
 
@@ -106,6 +107,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             [HycrestMissions.RegroupSinnatusBarn] = 11u
         };
         private readonly List<uint> barnDoors = [];
+
+        // time of day (retail video): the next scenario after the regroup scene of vote 46 is in the morning. The sky is
+        // held by a very long day; players entering later are sent it after the world server's own time (sent when they
+        // are added to the map)
+        private const uint MorningTimeOfDay = 7u * 3600u;
+        private const uint HeldDayLength = 30u * 24u * 3600u;
+        private static readonly TimeSpan TimeOfDayJoinDelay = TimeSpan.FromSeconds(1);
+        private uint? timeOfDay;
 
         // barn doors (retail video): no door while the doorway is open; closing spawns the barn's door (its own phase of
         // the main event), opening removes it, no animation
@@ -208,6 +217,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     {
                         HycrestPublicEvent.JoinPublicTeam(regroup, player);
                         UpdateRegroupParticipants();
+                    }
+
+                    if (timeOfDay.HasValue)
+                    {
+                        uint guid = player.Guid;
+                        sceneQueue.Enqueue(TimeOfDayJoinDelay, () =>
+                        {
+                            if (mapInstance.GetEntity<IPlayer>(guid) is IPlayer joined && timeOfDay.HasValue)
+                                SendTimeOfDay(joined, timeOfDay.Value);
+                        });
                     }
                     break;
                 }
@@ -385,6 +404,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             uint missionId = HycrestMissions.GetMission(voteTier, HycrestMissions.GetVoteTrack(voteId, winner));
 
+            // after the regroup scene the story moves on to the next morning
+            if (voteId == 46u)
+                SetTimeOfDay(MorningTimeOfDay);
+
             // outcome line from the track's spokesperson, the mission's story communicator, then the mission
             // a vote that times out finishes during the public event manager update, creating an event there would modify
             // the collection being enumerated, so everything runs from the scene queue on the following ticks
@@ -491,6 +514,23 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             regroupObjective = objectiveId;
             MoveNpcsTo(objectiveId);
             regroup.InvokeScriptCollection<IHycrestRegroupScript>(s => s.StartRegroup(objectiveId, (uint)mapInstance.PlayerCount));
+        }
+
+        private void SetTimeOfDay(uint secondsSinceMidnight)
+        {
+            timeOfDay = secondsSinceMidnight;
+            foreach (IPlayer player in mapInstance.GetPlayers())
+                SendTimeOfDay(player, secondsSinceMidnight);
+            log.LogInformation($"Hycrest: time of day set to {TimeSpan.FromSeconds(secondsSinceMidnight):hh\\:mm}.");
+        }
+
+        private static void SendTimeOfDay(IPlayer player, uint secondsSinceMidnight)
+        {
+            player.Session.EnqueueMessageEncrypted(new ServerTimeOfDay
+            {
+                TimeOfDay   = secondsSinceMidnight,
+                LengthOfDay = HeldDayLength
+            });
         }
 
         /// <summary>
