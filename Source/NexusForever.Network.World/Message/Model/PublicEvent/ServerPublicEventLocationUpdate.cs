@@ -10,8 +10,9 @@ namespace NexusForever.Network.World.Message.Model.PublicEvent
         public PublicEventOperationType Operation { get; set; }
         public uint WorldLocation2Id { get; set; }
 
-        // dev: the id's width isn't confirmed (14 bits here, the related unit and map region updates use 32)
-        public uint ObjectIdBits { get; set; } = 14u;
+        // the id is 32 bits, like in the unit and map region updates: with 14 bits the client showed nothing, with 32 it
+        // shows the objective's map area and minimap icon (tested in game, 28 Sep 2026)
+        public uint ObjectIdBits { get; set; } = 32u;
 
         public void Write(GamePacketWriter writer)
         {

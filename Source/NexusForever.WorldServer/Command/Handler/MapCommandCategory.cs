@@ -135,7 +135,7 @@ namespace NexusForever.WorldServer.Command.Handler
             uint operation,
             [Parameter("WorldLocation2 id.")]
             uint worldLocation2Id,
-            [Parameter("Optional width of the id in bits (default 14, try 15 or 32).")]
+            [Parameter("Optional width of the id in bits (default 32, the confirmed one).")]
             uint? bits)
         {
             IPlayer player = context.GetTargetOrInvoker<IPlayer>();
@@ -144,9 +144,9 @@ namespace NexusForever.WorldServer.Command.Handler
                 ObjectId         = objectId,
                 Operation        = (PublicEventOperationType)operation,
                 WorldLocation2Id = worldLocation2Id,
-                ObjectIdBits     = bits ?? 14u
+                ObjectIdBits     = bits ?? 32u
             });
-            context.SendMessage($"Sent location update: {(PublicEventOperationType)operation} {objectId}, location {worldLocation2Id}, id {bits ?? 14u} bits.");
+            context.SendMessage($"Sent location update: {(PublicEventOperationType)operation} {objectId}, location {worldLocation2Id}, id {bits ?? 32u} bits.");
         }
 
         [Command(Permission.MapUnload, "Dev: show or hide a map hex group (MapZoneHexGroup) on your map, e.g. the Hycrest groups 10-20.", "hexgroup")]
