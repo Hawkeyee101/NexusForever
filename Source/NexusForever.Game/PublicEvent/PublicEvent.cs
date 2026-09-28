@@ -207,6 +207,8 @@ namespace NexusForever.Game.PublicEvent
             publicEventManager.AddEvent(player.CharacterId, this);
 
             SendServerPublicEventStart(player, publicEventTeam);
+            foreach (IPublicEventObjective objective in publicEventTeam.GetObjectives())
+                objective.SendLocations(player);
 
             if (template.HasLiveStats())
                 SendServerPublicEventStatsUpdate();
@@ -524,21 +526,12 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
-        /// Set the WorldLocation2 points shown as markers for an objective.
+        /// Set the WorldLocation2 points shown on the map for an objective.
         /// </summary>
         public void SetObjectiveLocations(uint objectiveId, params uint[] worldLocation2Ids)
         {
             foreach (IPublicEventObjective objective in GetObjectives(objectiveId))
                 objective.SetLocations(worldLocation2Ids);
-        }
-
-        /// <summary>
-        /// Set the regions highlighted on the map for an objective.
-        /// </summary>
-        public void SetObjectiveMapRegions(uint objectiveId, params (uint WorldSocketId, uint WorldLocation2Id)[] regions)
-        {
-            foreach (IPublicEventObjective objective in GetObjectives(objectiveId))
-                objective.SetMapRegions(regions);
         }
 
         /// <summary>

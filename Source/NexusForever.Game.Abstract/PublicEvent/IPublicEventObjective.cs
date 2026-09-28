@@ -45,14 +45,14 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void ActivateObjective(uint max);
 
         /// <summary>
-        /// Set the WorldLocation2 points shown as markers for the objective.
+        /// Set the WorldLocation2 points shown on the map for the objective.
         /// </summary>
         void SetLocations(IEnumerable<uint> worldLocation2Ids);
 
         /// <summary>
-        /// Set the regions highlighted on the map for the objective.
+        /// Send the objective's map locations to <see cref="IPlayer"/>, e.g. after joining the event.
         /// </summary>
-        void SetMapRegions(IEnumerable<(uint WorldSocketId, uint WorldLocation2Id)> regions);
+        void SendLocations(IPlayer player);
 
         /// <summary>
         /// Set the dynamic max of an active objective, for example when participants join or leave.

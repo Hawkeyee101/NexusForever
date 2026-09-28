@@ -31,10 +31,11 @@ namespace NexusForever.Game.PublicEvent
         // targets so far (units the event spawns while the objective is active are added, e.g. waves)
         private readonly HashSet<uint> targets = [];
 
-        // shown on the map and zone map: markers at WorldLocation2 points and highlighted regions (world socket and
-        // WorldLocation2), the tables don't have them for most objectives so scripts supply them
+        // WorldLocation2 points shown for the objective on the map (the area and the minimap marker), like the ones the
+        // client takes from the objective's own WorldLocation2 in the tables; most objectives have none there, scripts
+        // supply them. Sent with ServerPublicEventLocationUpdate while the objective is active (putting them in the
+        // objective message's Locations/MapRegions left the client without the event in its tracker)
         private readonly List<uint> locations = [];
-        private readonly List<(uint WorldSocketId, uint WorldLocation2Id)> mapRegions = [];
 
         // most Exterminate locations have a radius of a few metres, the fight around them is larger
         private const float ExterminateMinRadius = 40f;
@@ -119,6 +120,12 @@ namespace NexusForever.Game.PublicEvent
                 BroadcastObjectiveUpdate();
             else
                 BroadcastObjectiveStatusUpdate();
+
+            // the map locations show while the objective is active
+            foreach (uint id in locations)
+                BroadcastLocation(status == PublicEventStatus.Active
+                    ? PublicEventOperationType.AddToObjective
+                    : PublicEventOperationType.RemoveFromObjective, id);
 
             Team.PublicEvent.InvokeScriptCollection<IPublicEventScript>(s => s.OnPublicEventObjectiveStatus(this));
         }
@@ -229,27 +236,48 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
-        /// Set the WorldLocation2 points shown as markers for the objective.
+        /// Set the WorldLocation2 points shown on the map for the objective.
         /// </summary>
         public void SetLocations(IEnumerable<uint> worldLocation2Ids)
         {
-            locations.Clear();
-            locations.AddRange(worldLocation2Ids);
+            List<uint> ids = worldLocation2Ids.Distinct().ToList();
+            if (Status == PublicEventStatus.Active)
+            {
+                foreach (uint id in locations.Except(ids))
+                    BroadcastLocation(PublicEventOperationType.RemoveFromObjective, id);
+                foreach (uint id in ids.Except(locations))
+                    BroadcastLocation(PublicEventOperationType.AddToObjective, id);
+            }
 
-            if (Status != PublicEventStatus.Inactive)
-                BroadcastObjectiveUpdate();
+            locations.Clear();
+            locations.AddRange(ids);
         }
 
         /// <summary>
-        /// Set the regions highlighted on the map for the objective.
+        /// Send the objective's map locations to <see cref="IPlayer"/>, e.g. after joining the event.
         /// </summary>
-        public void SetMapRegions(IEnumerable<(uint WorldSocketId, uint WorldLocation2Id)> regions)
+        public void SendLocations(IPlayer player)
         {
-            mapRegions.Clear();
-            mapRegions.AddRange(regions);
+            if (Status != PublicEventStatus.Active)
+                return;
 
-            if (Status != PublicEventStatus.Inactive)
-                BroadcastObjectiveUpdate();
+            foreach (uint id in locations)
+                player.Session.EnqueueMessageEncrypted(BuildLocationUpdate(PublicEventOperationType.AddToObjective, id));
+        }
+
+        private void BroadcastLocation(PublicEventOperationType operation, uint worldLocation2Id)
+        {
+            BroadcastObjectiveUpdate(BuildLocationUpdate(operation, worldLocation2Id));
+        }
+
+        private ServerPublicEventLocationUpdate BuildLocationUpdate(PublicEventOperationType operation, uint worldLocation2Id)
+        {
+            return new ServerPublicEventLocationUpdate
+            {
+                ObjectId         = Entry.Id,
+                Operation        = operation,
+                WorldLocation2Id = worldLocation2Id
+            };
         }
 
         /// <summary>
@@ -387,15 +415,7 @@ namespace NexusForever.Game.PublicEvent
                 ObjectiveId      = Entry.Id,
                 ObjectiveStatus  = BuildObjectiveStatus(),
                 Busy             = IsBusy,
-                ElapsedTimeMs    = (uint)(elapsedTimer * 1000d),
-                Locations        = [.. locations],
-                MapRegions       = mapRegions
-                    .Select(r => new Network.World.Message.Model.Shared.MapRegion
-                    {
-                        WorldSocketId    = r.WorldSocketId,
-                        WorldLocation2Id = r.WorldLocation2Id
-                    })
-                    .ToList()
+                ElapsedTimeMs    = (uint)(elapsedTimer * 1000d)
             };
         }
 

@@ -126,25 +126,6 @@ namespace NexusForever.WorldServer.Command.Handler
             context.SendMessage($"Set location {worldLocation2Id} on objective {objectiveId} of public event {eventId}.");
         }
 
-        [Command(Permission.MapUnload, "Highlight a map region for an objective of a public event on the current map (0 0 clears).", "eventregion")]
-        public void HandleMapEventRegion(ICommandContext context,
-            [Parameter("Public event id.")]
-            uint eventId,
-            [Parameter("Objective id.")]
-            uint objectiveId,
-            [Parameter("WorldSocket id.")]
-            uint worldSocketId,
-            [Parameter("WorldLocation2 id.")]
-            uint worldLocation2Id)
-        {
-            IPublicEvent publicEvent = GetRunningEvent(context, eventId);
-            if (publicEvent == null)
-                return;
-
-            publicEvent.SetObjectiveMapRegions(objectiveId, worldSocketId == 0u && worldLocation2Id == 0u ? [] : [(worldSocketId, worldLocation2Id)]);
-            context.SendMessage($"Set region (socket {worldSocketId}, location {worldLocation2Id}) on objective {objectiveId} of public event {eventId}.");
-        }
-
         [Command(Permission.MapUnload, "Dev: show or hide a map hex group (MapZoneHexGroup) on your map, e.g. the Hycrest groups 10-20.", "hexgroup")]
         public void HandleMapHexGroup(ICommandContext context,
             [Parameter("MapZoneHexGroup id.")]

@@ -50,6 +50,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint PremaThanks         = 447119u; // "Oh, thank you so much!..."
         private const uint AyitaMissionPayoff  = 444044u; // communicator: "Prema's home safe and sound..."
 
+        private const uint TarquimLocation   = 13041u;
+        private const uint MillitheaLocation = 39383u;
+        private const uint PremaLocation     = 40050u;
+
         // captives call out when a player comes this close
         private const float CaptiveCallRange = 20f;
 
@@ -178,8 +182,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         {
             base.OnLoad(owner);
 
-            // no map markers or regions yet: sending them in the objective packet (layout from #501, never used with
-            // data) left the client without the mission in the tracker (HYCREST.md, round 2 follow-up)
+            // map area and minimap marker: the objectives have no WorldLocation2 in the tables; these are the table points
+            // next to Tarquim and Millithea (layout A), Prema's is the nearest point (about 20 m)
+            publicEvent.SetObjectiveLocations(SpeakWithTarquim, TarquimLocation);
+            publicEvent.SetObjectiveLocations(RescueCaptives, MillitheaLocation);
 
             alarm = new HycrestAlarm(log, publicEvent, mapInstance, creatureInfoManager, spellParametersFactory,
                 globalQuestManager, dialogue);
@@ -727,8 +733,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 millitheaThanked = true;
                 dialogue.Say(entity, MillitheaThanks, false);
 
-                // one captive at a time: Prema and her guard appear now
+                // one captive at a time: Prema and her guard appear now, and the map points to her
                 publicEvent.SetPhase(PremaPhase);
+                publicEvent.SetObjectiveLocations(RescueCaptives, PremaLocation);
 
                 // the rebels go ahead to Sinnatus's Barn for the regroup
                 mapInstance.PublicEventManager.GetEvent(HycrestPublicEvent.Main)?
