@@ -1,4 +1,5 @@
-﻿using NexusForever.Game.Static.PublicEvent;
+﻿using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.Message;
 using NexusForever.Network.World.Message.Model.Shared;
@@ -50,6 +51,17 @@ namespace NexusForever.Game.Abstract.PublicEvent
         /// The objective is completed immediately if the current count already meets the new max.
         /// </remarks>
         void SetDynamicMax(uint max);
+
+        /// <summary>
+        /// Add a unit that has to be killed for an active Exterminate objective, <paramref name="force"/> skips the checks
+        /// that decide which units count on their own (hostile, in the objective's location or target group).
+        /// </summary>
+        void AddTarget(IUnitEntity unit, bool force = false);
+
+        /// <summary>
+        /// Invoked when a unit left the map or was killed, <paramref name="killed"/> counts it towards an Exterminate objective.
+        /// </summary>
+        void OnTargetRemoved(uint guid, bool killed);
 
         /// <summary>
         /// Reset the objective.

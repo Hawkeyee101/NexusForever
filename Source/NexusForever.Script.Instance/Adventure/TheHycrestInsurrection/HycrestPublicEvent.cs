@@ -6,8 +6,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
     public static class HycrestPublicEvent
     {
-        public const uint Intro = 418u;
-        public const uint Main  = 419u;
+        public const uint Intro   = 418u;
+        public const uint Main    = 419u;
+        public const uint Regroup = 445u;
 
         /// <summary>
         /// Join <see cref="IPlayer"/> to the public team of <see cref="IPublicEvent"/>, unless already a member or the event has finished.

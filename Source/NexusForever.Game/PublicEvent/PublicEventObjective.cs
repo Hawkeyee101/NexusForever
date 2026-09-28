@@ -1,5 +1,10 @@
-﻿using NexusForever.Game.Abstract.PublicEvent;
+﻿using System.Numerics;
+using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Map.Instance;
+using NexusForever.Game.Abstract.PublicEvent;
 using NexusForever.Game.Static.PublicEvent;
+using NexusForever.Game.Static.Reputation;
+using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.Message;
 using NexusForever.Network.World.Message.Model.PublicEvent;
@@ -21,6 +26,15 @@ namespace NexusForever.Game.PublicEvent
 
         private double elapsedTimer;
         private UpdateTimer failureTimer;
+
+        // Exterminate: the units that have to be killed; the count is the number killed, the dynamic max the number of
+        // targets so far (units the event spawns while the objective is active are added, e.g. waves)
+        private readonly HashSet<uint> targets = [];
+
+        // most Exterminate locations have a radius of a few metres, the fight around them is larger
+        private const float ExterminateMinRadius = 40f;
+
+        private bool IsExterminate => Entry.PublicEventObjectiveTypeEnum == PublicEventObjectiveType.Exterminate;
 
         private bool IsChecklist => Entry.PublicEventObjectiveTypeEnum
             is PublicEventObjectiveType.ActivateTargetGroupChecklist
@@ -85,7 +99,11 @@ namespace NexusForever.Game.PublicEvent
             Status = status;
 
             if (status == PublicEventStatus.Active)
+            {
                 StartTimers();
+                if (IsExterminate)
+                    SelectTargets();
+            }
             else
                 failureTimer = null;
 
@@ -174,6 +192,9 @@ namespace NexusForever.Game.PublicEvent
 
         private bool IsComplete()
         {
+            if (IsExterminate)
+                return DynamicMax > 0 && Count >= DynamicMax;
+
             if (Entry.PublicEventObjectiveFlags.HasFlag(PublicEventObjectiveFlag.DynamicObjective))
                 return Count >= DynamicMax;
 
@@ -224,6 +245,94 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
+        /// Select the units that have to be killed for an Exterminate objective from the entities of its public event.
+        /// </summary>
+        private void SelectTargets()
+        {
+            targets.Clear();
+            Count = 0;
+
+            foreach (IGridEntity entity in Team.PublicEvent.GetEntities())
+                if (entity is IUnitEntity unit && IsTargetCandidate(unit))
+                    targets.Add(unit.Guid);
+
+            DynamicMax = (uint)targets.Count;
+        }
+
+        /// <summary>
+        /// Return true if <paramref name="unit"/> counts for an Exterminate objective: alive, hostile to the players and in
+        /// the objective's location and target group when the objective has them.
+        /// </summary>
+        private bool IsTargetCandidate(IUnitEntity unit)
+        {
+            if (!unit.IsAlive || unit is IPlayer)
+                return false;
+
+            if (Entry.WorldLocation2Id != 0)
+            {
+                WorldLocation2Entry location = GameTableManager.Instance.WorldLocation2.GetEntry(Entry.WorldLocation2Id);
+                if (location != null)
+                {
+                    float radius = Math.Max(location.Radius, ExterminateMinRadius);
+                    var centre = new Vector2(location.Position0, location.Position2);
+                    if (Vector2.Distance(centre, new Vector2(unit.Position.X, unit.Position.Z)) > radius)
+                        return false;
+                }
+            }
+
+            // a creature target group names the units, otherwise every unit hostile to the players counts
+            TargetGroupEntry targetGroup = Entry.ObjectId != 0 ? GameTableManager.Instance.TargetGroup.GetEntry(Entry.ObjectId) : null;
+            if (targetGroup?.Type == 1u)
+                return AssetManager.Instance.GetTargetGroupsForCreatureId(unit.CreatureId).Contains(Entry.ObjectId);
+
+            return IsHostileToPlayers(unit);
+        }
+
+        private bool IsHostileToPlayers(IUnitEntity unit)
+        {
+            if (Team.PublicEvent.Map is not IMapInstance instance)
+                return false;
+
+            return instance.GetPlayers().Any(p => unit.GetDispositionTo(p.Faction1) < Disposition.Friendly);
+        }
+
+        /// <summary>
+        /// Add a unit that has to be killed for an active Exterminate objective, <paramref name="force"/> skips the checks
+        /// that decide which units count on their own (hostile, in the objective's location or target group).
+        /// </summary>
+        public void AddTarget(IUnitEntity unit, bool force = false)
+        {
+            if (!IsExterminate || Status != PublicEventStatus.Active || targets.Contains(unit.Guid))
+                return;
+
+            if (!force && !IsTargetCandidate(unit))
+                return;
+
+            targets.Add(unit.Guid);
+            DynamicMax++;
+            BroadcastObjectiveUpdate();
+        }
+
+        /// <summary>
+        /// Invoked when a unit left the map or was killed, <paramref name="killed"/> counts it towards an Exterminate objective.
+        /// </summary>
+        public void OnTargetRemoved(uint guid, bool killed)
+        {
+            if (!IsExterminate || Status != PublicEventStatus.Active || !targets.Remove(guid))
+                return;
+
+            if (killed)
+                Count++;
+            else
+                DynamicMax--;
+
+            BroadcastObjectiveUpdate();
+
+            if (IsComplete())
+                SetStatus(PublicEventStatus.Succeeded);
+        }
+
+        /// <summary>
         /// Reset the objective.
         /// </summary>
         /// <remarks>
@@ -237,6 +346,7 @@ namespace NexusForever.Game.PublicEvent
             Count      = 0;
             DynamicMax = 0;
             Checklist  = 0;
+            targets.Clear();
 
             SetStatus(PublicEventStatus.Inactive);
         }

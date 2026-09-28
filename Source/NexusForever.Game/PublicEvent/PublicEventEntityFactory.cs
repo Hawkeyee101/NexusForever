@@ -102,5 +102,21 @@ namespace NexusForever.Game.PublicEvent
             entities.Add(entity);
             return entity;
         }
+
+        /// <summary>
+        /// Return all entities spawned or created for the <see cref="IPublicEvent"/>.
+        /// </summary>
+        public IEnumerable<IGridEntity> GetEntities()
+        {
+            return entities;
+        }
+
+        /// <summary>
+        /// Return true if the <see cref="IGridEntity"/> was spawned or created for the <see cref="IPublicEvent"/>.
+        /// </summary>
+        public bool Contains(IGridEntity entity)
+        {
+            return entities.Contains(entity);
+        }
     }
 }

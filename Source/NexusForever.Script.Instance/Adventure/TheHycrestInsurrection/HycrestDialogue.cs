@@ -12,7 +12,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// Plays scripted NPC lines from en-US.bin as NPC say (speech bubble and chat).
     /// </summary>
     /// <remarks>
-    /// Lines are resolved to English text on the server. Voice cues are sound only and never sent as chat (see HYCREST.md).
+    /// Lines are resolved to English text on the server.
     /// </remarks>
     public partial class HycrestDialogue
     {
@@ -31,8 +31,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         [GeneratedRegex(@"\$[pm]?\(creature=(\d+)\)")]
         private static partial Regex CreatureRegex();
-
-        private static uint visualHandle = 0x48590000u;
 
         private readonly IGameTableManager gameTableManager;
         private readonly TimedActionQueue actionQueue;
@@ -116,38 +114,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 Guid       = entity.Guid,
                 StandState = StandState.Stand
             });
-        }
-
-        /// <summary>
-        /// Play a visual effect on <paramref name="entity"/> for every player that can see it.
-        /// </summary>
-        /// <remarks>
-        /// The client only shows cinematic visual effects while a cinematic is playing.
-        /// </remarks>
-        public static uint PlayVisualEffect(IWorldEntity entity, uint visualEffectId)
-        {
-            uint handle = Interlocked.Increment(ref visualHandle);
-            entity.EnqueueToVisible(new ServerCinematicVisualEffect
-            {
-                VisualHandle      = handle,
-                VisualEffectId    = visualEffectId,
-                UnitId            = entity.Guid,
-                Position          = new Position(entity.Position),
-                RemoveOnCameraEnd = false
-            }, true);
-
-            return handle;
-        }
-
-        /// <summary>
-        /// End a visual effect started with <see cref="PlayVisualEffect"/> for every player that can see <paramref name="entity"/>.
-        /// </summary>
-        public static void EndVisualEffect(IWorldEntity entity, uint handle)
-        {
-            entity.EnqueueToVisible(new ServerCinematicVisualEffectEnd
-            {
-                VisualHandle = handle
-            }, true);
         }
     }
 }

@@ -58,6 +58,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
+        /// Invoked when <see cref="IPublicEvent"/> finishes with the winning <see cref="IPublicEventTeam"/>.
+        /// </summary>
+        public new void OnPublicEventFinish(IPublicEvent finished, IPublicEventTeam publicEventTeam)
+        {
+            base.OnPublicEventFinish(finished, publicEventTeam);
+
+            // the main event runs the adventure from mission to mission
+            if (HycrestMissions.IsMission(finished.Id))
+                map.PublicEventManager.GetEvent(HycrestPublicEvent.Main)?
+                    .InvokeScriptCollection<IHycrestMainEventScript>(s => s.OnMissionFinished(finished));
+        }
+
+        /// <summary>
         /// Invoked before <see cref="IPlayer"/> is added to the map: arriving players enter standing on the drop ship.
         /// </summary>
         public void OnPlayerEntering(IPlayer player, IMapPosition mapPosition)

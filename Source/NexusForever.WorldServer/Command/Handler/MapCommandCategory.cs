@@ -1,8 +1,11 @@
+using System.Linq;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Map;
 using Microsoft.Extensions.DependencyInjection;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.Map.Lock;
+using NexusForever.Game.Abstract.PublicEvent;
+using NexusForever.Game.Static.PublicEvent;
 using NexusForever.Shared;
 using NexusForever.Game.Map;
 using NexusForever.Game.Static.Map;
@@ -48,6 +51,60 @@ namespace NexusForever.WorldServer.Command.Handler
 
             player.TeleportTo(worldId, player.Position.X, player.Position.Y, player.Position.Z);
             context.SendMessage($"Moving into a fresh instance of world {worldId}. The old instance is left empty.");
+        }
+
+        // local dev aids (not for upstream yet): inspect and drive public events, e.g. to skip missions that aren't built
+        [Command(Permission.MapUnload, "List the public events on the current map with their phase and active objectives.", "events")]
+        public void HandleMapEvents(ICommandContext context)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            foreach (IPublicEvent publicEvent in player.Map.PublicEventManager.GetEvents())
+            {
+                string objectives = string.Join(", ", publicEvent.GetTeams()
+                    .SelectMany(t => t.GetObjectives())
+                    .Where(o => o.Status == PublicEventStatus.Active)
+                    .Select(o => $"{o.Entry.Id} {o.Count}/{(o.DynamicMax > 0 ? o.DynamicMax : o.Entry.Count)}"));
+
+                context.SendMessage($"Event {publicEvent.Id}: phase {publicEvent.Phase}{(publicEvent.HasFinished ? ", finished" : "")}; active: {(objectives.Length > 0 ? objectives : "none")}");
+            }
+        }
+
+        [Command(Permission.MapUnload, "Finish a public event on the current map as a success.", "eventfinish")]
+        public void HandleMapEventFinish(ICommandContext context,
+            [Parameter("Public event id.")]
+            uint eventId)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            IPublicEvent publicEvent = player.Map.PublicEventManager.GetEvent(eventId);
+            if (publicEvent == null || publicEvent.HasFinished)
+            {
+                context.SendError($"Public event {eventId} isn't running on this map!");
+                return;
+            }
+
+            publicEvent.Finish(PublicEventTeam.PublicTeam);
+            context.SendMessage($"Finished public event {eventId}.");
+        }
+
+        [Command(Permission.MapUnload, "Update an objective of a public event on the current map.", "eventobjective")]
+        public void HandleMapEventObjective(ICommandContext context,
+            [Parameter("Public event id.")]
+            uint eventId,
+            [Parameter("Objective id.")]
+            uint objectiveId,
+            [Parameter("Optional count to add (default 1).")]
+            uint? count)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            IPublicEvent publicEvent = player.Map.PublicEventManager.GetEvent(eventId);
+            if (publicEvent == null || publicEvent.HasFinished)
+            {
+                context.SendError($"Public event {eventId} isn't running on this map!");
+                return;
+            }
+
+            publicEvent.UpdateObjective(objectiveId, (int)(count ?? 1u));
+            context.SendMessage($"Updated objective {objectiveId} of public event {eventId}.");
         }
 
         [Command(Permission.MapPlayerRemove, "Remove player from current map instance.", "remove")]

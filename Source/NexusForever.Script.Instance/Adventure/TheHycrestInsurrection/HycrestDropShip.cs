@@ -41,7 +41,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         // boarding waits this long after the client has finished loading the map (it can teleport again), and the
         // teleport shows a loading screen; teleporting in the same tick as ClientEnteredWorld left a client in an empty
-        // void once (27 Sep 2026)
+        // void once
         public const double BoardAfterLoad = 1.5d;
 
         // after boarding, position and platform reports are ignored this long: reports sent before the client applied
@@ -57,8 +57,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         // landed: within LandedHeight of the terrain (map file; props like roofs aren't in it), or no longer falling
         // (moved less than LandedMaxDrop vertically within LandedWindow) once the player has fallen for at least
-        // MinFallTime; right after leaving the ship the fall is still too slow to tell (27 Sep 2026: Rocket Fall stopped
-        // after one cast because the first window counted as landed)
+        // MinFallTime; right after leaving the ship the fall is still too slow to tell
         private const float LandedHeight   = 2f;
         private const float LandedMaxDrop  = 0.3f;
         private const double LandedWindow  = 1d;
@@ -90,7 +89,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         /// <summary>
         /// The ship is at its hover point (flown in, or never had to). Players are only put on board then: carrying players
-        /// on a moving platform made them fall through the floor (27 Sep 2026).
+        /// on a moving platform the client doesn't carry made them fall through the floor.
         /// </summary>
         public bool Arrived { get; private set; }
 
@@ -111,12 +110,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// Show a loading screen for the boarding teleport; not needed while the intro text's black screen hides it.
         /// </summary>
         public bool BoardWithLoadingScreen { get; set; } = true;
-
-        /// <summary>
-        /// Invoked when a player waiting to board has finished loading the map (the boarding teleport follows after
-        /// <see cref="BoardAfterLoad"/>).
-        /// </summary>
-        public event Action<IPlayer> PlayerLoaded;
 
         /// <summary>
         /// Invoked when a player has been put on board.
@@ -201,7 +194,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             DoorsOpen = true;
             // the exit is the ramp on the ship's right (towards the barn); in game the "Left" door entity (28509) is the
-            // one that closes that doorway (27 Sep 2026: opening 18338 opened the other side)
+            // one that closes that doorway
             SetState(map.GetEntity<IWorldEntity>(LeftDoorGuid), StandState.State1);
 
             log.LogInformation("Hycrest: drop ship exit door opened.");
@@ -367,7 +360,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                         // entered the map standing on the deck, nothing to teleport
                         drop.Boarded = true;
                         SinceFirstBoard ??= 0d;
-                        PlayerLoaded?.Invoke(player);
                         PlayerBoarded?.Invoke(player);
                         continue;
                     }
@@ -375,14 +367,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     if (Moving)
                     {
                         // loaded, waiting for the ship to stand still
-                        if (drop.SinceLoaded == 0d)
-                            PlayerLoaded?.Invoke(player);
                         drop.SinceLoaded = Math.Max(drop.SinceLoaded, BoardAfterLoad);
                         continue;
                     }
-
-                    if (drop.SinceLoaded == 0d)
-                        PlayerLoaded?.Invoke(player);
 
                     drop.SinceLoaded += lastTick;
                     if (drop.SinceLoaded < BoardAfterLoad)

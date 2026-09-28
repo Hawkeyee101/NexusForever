@@ -169,6 +169,9 @@ namespace NexusForever.Game.PublicEvent
                 log.LogTrace($"Public event information for character {player.CharacterId} added to map {map.Entry.Id} store.");
             }
 
+            foreach (IPublicEvent publicEvent in publicEvents.Values.ToList())
+                publicEvent.OnEntityAddedToMap(gridEntity);
+
             InvokeScriptCollection<IPublicEventScript>(s => s.OnAddToMap(gridEntity));
         }
 
@@ -177,6 +180,9 @@ namespace NexusForever.Game.PublicEvent
         /// </summary>
         public void OnRemoveFromMap(IGridEntity gridEntity)
         {
+            foreach (IPublicEvent publicEvent in publicEvents.Values.ToList())
+                publicEvent.OnEntityRemovedFromMap(gridEntity);
+
             InvokeScriptCollection<IPublicEventScript>(s => s.OnRemoveFromMap(gridEntity));
 
             if (gridEntity is not IPlayer player)
@@ -190,6 +196,15 @@ namespace NexusForever.Game.PublicEvent
             characters.Remove(player.CharacterId);
 
             log.LogTrace($"Public event information for character {player.CharacterId} removed from map {map.Entry.Id} store.");
+        }
+
+        /// <summary>
+        /// Invoked when a <see cref="IUnitEntity"/> on the owner <see cref="IBaseMap"/> is killed.
+        /// </summary>
+        public void OnEntityKilled(IUnitEntity unit)
+        {
+            foreach (IPublicEvent publicEvent in publicEvents.Values.ToList())
+                publicEvent.OnEntityKilled(unit);
         }
 
         /// <summary>

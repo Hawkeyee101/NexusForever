@@ -154,6 +154,37 @@ namespace NexusForever.Game.Abstract.PublicEvent
         T CreateEntity<T>() where T : IGridEntity;
 
         /// <summary>
+        /// Return all entities spawned or created for the <see cref="IPublicEvent"/>.
+        /// </summary>
+        IEnumerable<IGridEntity> GetEntities();
+
+        /// <summary>
+        /// Add a unit that has to be killed for an active Exterminate objective, <paramref name="force"/> skips the checks
+        /// that decide which units count on their own (hostile, in the objective's location or target group).
+        /// </summary>
+        void AddObjectiveTarget(uint objectiveId, IUnitEntity unit, bool force = true);
+
+        /// <summary>
+        /// Remove a unit from an active Exterminate objective without counting it as killed.
+        /// </summary>
+        void RemoveObjectiveTarget(uint objectiveId, uint guid);
+
+        /// <summary>
+        /// Invoked when a <see cref="IGridEntity"/> is added to the map the public event is on.
+        /// </summary>
+        void OnEntityAddedToMap(IGridEntity entity);
+
+        /// <summary>
+        /// Invoked when a <see cref="IGridEntity"/> is removed from the map the public event is on.
+        /// </summary>
+        void OnEntityRemovedFromMap(IGridEntity entity);
+
+        /// <summary>
+        /// Invoked when a <see cref="IUnitEntity"/> on the map the public event is on is killed.
+        /// </summary>
+        void OnEntityKilled(IUnitEntity unit);
+
+        /// <summary>
         /// Invoke <see cref="Action{T}"/> against <see cref="IPublicEvent"/> script collection.
         /// </summary>
         void InvokeScriptCollection<T>(Action<T> action);

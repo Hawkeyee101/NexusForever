@@ -515,6 +515,79 @@ namespace NexusForever.Game.PublicEvent
         /// <remarks>
         /// Entity will be automatically removed when the <see cref="IPublicEvent"/> is finished.
         /// </remarks>
+        /// <summary>
+        /// Return all entities spawned or created for the <see cref="IPublicEvent"/>.
+        /// </summary>
+        public IEnumerable<IGridEntity> GetEntities()
+        {
+            return entityFactory.GetEntities();
+        }
+
+        /// <summary>
+        /// Add a unit that has to be killed for an active Exterminate objective, <paramref name="force"/> skips the checks
+        /// that decide which units count on their own (hostile, in the objective's location or target group).
+        /// </summary>
+        public void AddObjectiveTarget(uint objectiveId, IUnitEntity unit, bool force = true)
+        {
+            foreach (IPublicEventObjective objective in GetObjectives(objectiveId))
+                objective.AddTarget(unit, force);
+        }
+
+        /// <summary>
+        /// Remove a unit from an active Exterminate objective without counting it as killed.
+        /// </summary>
+        public void RemoveObjectiveTarget(uint objectiveId, uint guid)
+        {
+            foreach (IPublicEventObjective objective in GetObjectives(objectiveId))
+                objective.OnTargetRemoved(guid, false);
+        }
+
+        private IEnumerable<IPublicEventObjective> GetObjectives(uint objectiveId)
+        {
+            return teams.Values
+                .SelectMany(t => t.GetObjectives())
+                .Where(o => o.Entry.Id == objectiveId)
+                .ToList();
+        }
+
+        private IEnumerable<IPublicEventObjective> GetAllObjectives()
+        {
+            return teams.Values
+                .SelectMany(t => t.GetObjectives())
+                .ToList();
+        }
+
+        /// <summary>
+        /// Invoked when a <see cref="IGridEntity"/> is added to the map the public event is on.
+        /// </summary>
+        public void OnEntityAddedToMap(IGridEntity entity)
+        {
+            // units the event spawns while an Exterminate objective is active count for it too (e.g. waves)
+            if (entity is not IUnitEntity unit || !entityFactory.Contains(entity))
+                return;
+
+            foreach (IPublicEventObjective objective in GetAllObjectives())
+                objective.AddTarget(unit);
+        }
+
+        /// <summary>
+        /// Invoked when a <see cref="IGridEntity"/> is removed from the map the public event is on.
+        /// </summary>
+        public void OnEntityRemovedFromMap(IGridEntity entity)
+        {
+            foreach (IPublicEventObjective objective in GetAllObjectives())
+                objective.OnTargetRemoved(entity.Guid, false);
+        }
+
+        /// <summary>
+        /// Invoked when a <see cref="IUnitEntity"/> on the map the public event is on is killed.
+        /// </summary>
+        public void OnEntityKilled(IUnitEntity unit)
+        {
+            foreach (IPublicEventObjective objective in GetAllObjectives())
+                objective.OnTargetRemoved(unit.Guid, true);
+        }
+
         public T CreateEntity<T>() where T : IGridEntity
         {
             return entityFactory.CreateEntity<T>();

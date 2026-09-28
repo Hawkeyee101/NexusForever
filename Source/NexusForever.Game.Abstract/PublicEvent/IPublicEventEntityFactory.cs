@@ -23,5 +23,15 @@ namespace NexusForever.Game.Abstract.PublicEvent
         /// Create a new <see cref="IGridEntity"/> that belongs to the <see cref="IPublicEvent"/>.
         /// </summary>
         T CreateEntity<T>() where T : IGridEntity;
+
+        /// <summary>
+        /// Return all entities spawned or created for the <see cref="IPublicEvent"/>.
+        /// </summary>
+        IEnumerable<IGridEntity> GetEntities();
+
+        /// <summary>
+        /// Return true if the <see cref="IGridEntity"/> was spawned or created for the <see cref="IPublicEvent"/>.
+        /// </summary>
+        bool Contains(IGridEntity entity);
     }
 }

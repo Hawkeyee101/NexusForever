@@ -550,6 +550,7 @@ namespace NexusForever.Game.Entity
             }
 
             GenerateRewards(killer);
+            Map?.PublicEventManager?.OnEntityKilled(this);
             // TODO: schedule respawn
 
             ThreatManager.ClearThreatList();

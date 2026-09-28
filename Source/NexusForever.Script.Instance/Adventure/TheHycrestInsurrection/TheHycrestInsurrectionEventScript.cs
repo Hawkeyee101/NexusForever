@@ -15,27 +15,21 @@ using NexusForever.Script.Template.Filter;
 
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
+    /// <summary>
+    /// The Hycrest Insurrection (public event 419): the barn scene after the intro, then the run from mission to mission
+    /// (see <see cref="HycrestMissions"/>): mission votes, the interlude, the finale and a regroup at a hideout in between.
+    /// </summary>
     [ScriptFilterOwnerId(HycrestPublicEvent.Main)]
-    public class TheHycrestInsurrectionEventScript : IPublicEventScript, IOwnedScript<IPublicEvent>
+    public class TheHycrestInsurrectionEventScript : IPublicEventScript, IOwnedScript<IPublicEvent>, IHycrestMainEventScript
     {
-        // development aid: after the intro, walking into the Abandoned Barn again restarts the mission vote
-        // set to false once missions follow each other properly
-        public const bool AllowVoteRetest = false;
-        public const uint VoteRetestTriggerId = 114901u;
-        private const float VoteRetestTriggerRange = 8f;
-        private static readonly Vector3 VoteRetestTriggerPosition = new(-2526.80f, -925.82f, -1190.93f);
-
-        private const uint MissionVoteId = 45u;
-
-        // vote 45 options in track order Merciful / Tactical / Militant: The Farmer's Daughter, The Science of Revenge,
-        // Leveling the Field. Each track has a spokesperson who gives the outcome line; the story communicator is the
-        // mission's setup message (none is known for The Science of Revenge).
-        private static readonly (uint EventId, PublicEventCreature Speaker, uint OutcomeText, uint CommunicatorText)[] MissionVoteOptions =
-        [
-            (420u, PublicEventCreature.AyitaSinnatus,  465550u, 444047u), // "Prema's father Tarquim is right outside..."
-            (421u, PublicEventCreature.VesnaTaranoft,  465551u, 0u),      // "Be quick about finding Groo..."
-            (422u, PublicEventCreature.LysionSinnatus, 465552u, 444107u)  // "Once we've compromised their shields..."
-        ];
+        // what happens when a mission wins its vote: the track's spokesperson gives the outcome line and the story
+        // communicator is the mission's setup message (known for the first vote; none for The Science of Revenge)
+        private static readonly Dictionary<uint, (PublicEventCreature Speaker, uint OutcomeText, uint CommunicatorText)> MissionOutcomes = new()
+        {
+            [420u] = (PublicEventCreature.AyitaSinnatus,  465550u, 444047u), // "Prema's father Tarquim is right outside..."
+            [421u] = (PublicEventCreature.VesnaTaranoft,  465551u, 0u),      // "Be quick about finding Groo..."
+            [422u] = (PublicEventCreature.LysionSinnatus, 465552u, 444107u)  // "Once we've compromised their shields..."
+        };
 
         // barn scene, en-US text ids in speaking order (retail video); gestures for Vesna and Lysion
         private const uint BarnArrivalLine = 466926u; // Ayita: "Sometimes I worry about you, Father..."
@@ -55,23 +49,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             (PublicEventCreature.LysionSinnatus, 464076u)  // Militant: "Ayita, how many times must I tell you?..."
         ];
 
-        // voice cues (Play_AdventureVO_HycrestInsurrection_*), sound only, never shown as text: retail plays Vesna's "A new
-        // opportunity has presented itself." with her first briefing line and "Show them no mercy." when her mission wins
-        // (video); Lysion's "Don't back down..." with his last pitch line (inferred NewMission). Not played yet: there is no
-        // confirmed sound-only way outside a cinematic (to test with the story sound dev command, see HYCREST.md)
-        private static readonly Dictionary<uint, uint> VoiceCues = new()
-        {
-            [160643u] = 48310u, // Vesna NewMission
-            [464076u] = 48307u  // Lysion NewMission (inferred)
-        };
-
-        private static readonly Dictionary<PublicEventCreature, uint> MissionStartCues = new()
-        {
-            [PublicEventCreature.AyitaSinnatus]  = 48303u, // "Be careful now, love!"
-            [PublicEventCreature.VesnaTaranoft]  = 48309u, // "Show them no mercy."
-            [PublicEventCreature.LysionSinnatus] = 48305u
-        };
-
         // speech pacing: at least MinLineSeconds per line, longer lines get more time
         private const double MinLineSeconds = 4d;
         private const double CharactersPerSecond = 14d;
@@ -79,19 +56,24 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint CommunicatorDurationMs = 10000u;
         private static readonly TimeSpan OutcomeCommunicatorDelay = TimeSpan.FromSeconds(3);
         private static readonly TimeSpan OutcomeMissionDelay = TimeSpan.FromSeconds(6);
+        private static readonly TimeSpan NextMissionDelay = TimeSpan.FromSeconds(5);
 
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
 
         private bool voteInProgress;
         private IPublicEvent mission;
+        private IPublicEvent regroup;
+
+        // the run so far: the tier of the current mission and the track chosen on each tier
+        private int tier = -1;
+        private readonly HycrestTrack[] tracks = new HycrestTrack[HycrestMissions.TierCount];
 
         private readonly TimedActionQueue sceneQueue = new();
         private readonly Dictionary<PublicEventCreature, uint> npcGuids = [];
         private bool barnArrivalPlayed;
         private double sceneClock;
         private double barnArrivalLineEnd;
-        private bool voteRetestTriggerCreated;
 
         #region Dependency Injection
 
@@ -150,15 +132,31 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             {
                 case IPlayer player:
                 {
-                    // late joiners also need to join the current mission, the map script only joins them to the main and intro events
+                    // late joiners also need to join the current mission and the regroup, the map script only joins them
+                    // to the main and intro events
                     if (mission != null)
                         HycrestPublicEvent.JoinPublicTeam(mission, player);
+                    if (regroup != null)
+                    {
+                        HycrestPublicEvent.JoinPublicTeam(regroup, player);
+                        UpdateRegroupParticipants();
+                    }
                     break;
                 }
                 case IWorldEntity worldEntity:
                     OnAddToMapWorldEntity(worldEntity);
                     break;
             }
+        }
+
+        /// <summary>
+        /// Invoked when a <see cref="IGridEntity"/> is removed from the map the public event is on.
+        /// </summary>
+        public void OnRemoveFromMap(IGridEntity entity)
+        {
+            // a player leaving no longer has to reach the hideout; counted on the next tick, once they are gone
+            if (entity is IPlayer)
+                sceneQueue.Enqueue(TimeSpan.Zero, UpdateRegroupParticipants);
         }
 
         private void OnAddToMapWorldEntity(IWorldEntity worldEntity)
@@ -233,25 +231,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             TimeSpan start = TimeSpan.FromSeconds(Math.Max(0d, barnArrivalLineEnd - sceneClock));
             TimeSpan time = QueueLines(start, BarnBriefing);
             time = QueueLines(time, MissionVotePitches);
-            sceneQueue.Enqueue(time, StartMissionVote);
-        }
-
-        private void CreateVoteRetestTrigger()
-        {
-            if (!AllowVoteRetest || voteRetestTriggerCreated)
-                return;
-
-            // created after the first vote, players still in the barn only retrigger it by walking out and back in
-            voteRetestTriggerCreated = true;
-            var trigger = publicEvent.CreateEntity<IGridTriggerEntity>();
-            trigger.Initialise(VoteRetestTriggerId, VoteRetestTriggerRange);
-            trigger.AddToMap(mapInstance, VoteRetestTriggerPosition);
+            sceneQueue.Enqueue(time, () => StartVote(HycrestMissions.GetVote(0, HycrestTrack.Tactical)));
         }
 
         /// <summary>
-        /// Start the mission vote, unless one is already in progress.
+        /// Start a mission vote, unless one is already in progress.
         /// </summary>
-        public void StartMissionVote()
+        private void StartVote(uint voteId)
         {
             if (voteInProgress)
                 return;
@@ -259,13 +245,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             if (publicEvent.HasFinished)
             {
                 // a finished event no longer ticks, so the vote would never time out
-                log.LogWarning($"Hycrest: public event {HycrestPublicEvent.Main} has finished, restart the world server for a new instance.");
+                log.LogWarning($"Hycrest: public event {HycrestPublicEvent.Main} has finished, start a new instance.");
                 return;
             }
 
             voteInProgress = true;
-            publicEvent.StartVote(PublicEventTeam.PublicTeam, MissionVoteId, 0u);
-            log.LogInformation($"Hycrest: started vote {MissionVoteId} for public event {HycrestPublicEvent.Main}.");
+            publicEvent.StartVote(PublicEventTeam.PublicTeam, voteId, 0u);
+            log.LogInformation($"Hycrest: started vote {voteId} for public event {HycrestPublicEvent.Main}.");
         }
 
         /// <summary>
@@ -283,23 +269,34 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             log.LogInformation($"Hycrest: vote {voteId} for public event {publicEvent.Id} finished, winner {winner} ({label ?? "unknown"}).");
 
-            if (voteId != MissionVoteId || winner >= MissionVoteOptions.Length)
+            int voteTier = voteId switch
+            {
+                45u => 0,
+                46u => 1,
+                47u or 48u or 49u => 3,
+                _ => -1
+            };
+            if (voteTier < 0)
                 return;
 
-            sceneQueue.Enqueue(TimeSpan.Zero, CreateVoteRetestTrigger);
+            uint missionId = HycrestMissions.GetMission(voteTier, HycrestMissions.GetVoteTrack(voteId, winner));
 
             // outcome line from the track's spokesperson, the mission's story communicator, then the mission
             // a vote that times out finishes during the public event manager update, creating an event there would modify
             // the collection being enumerated, so everything runs from the scene queue on the following ticks
-            (uint eventId, PublicEventCreature speaker, uint outcomeText, uint communicatorText) = MissionVoteOptions[winner];
-            sceneQueue.Enqueue(TimeSpan.Zero, () => dialogue.Say(GetNpc(speaker), outcomeText, UsesGesture(speaker)));
-            if (communicatorText != 0u)
-                sceneQueue.Enqueue(OutcomeCommunicatorDelay, () =>
-                {
-                    foreach (IPlayer player in mapInstance.GetPlayers())
-                        storyBuilder.SendStoryCommunicator(communicatorText, (uint)speaker, player, CommunicatorDurationMs);
-                });
-            sceneQueue.Enqueue(OutcomeMissionDelay, () => StartMission(eventId));
+            if (MissionOutcomes.TryGetValue(missionId, out var outcome))
+            {
+                (PublicEventCreature speaker, uint outcomeText, uint communicatorText) = outcome;
+                sceneQueue.Enqueue(TimeSpan.Zero, () => dialogue.Say(GetNpc(speaker), outcomeText, UsesGesture(speaker)));
+                if (communicatorText != 0u)
+                    sceneQueue.Enqueue(OutcomeCommunicatorDelay, () =>
+                    {
+                        foreach (IPlayer player in mapInstance.GetPlayers())
+                            storyBuilder.SendStoryCommunicator(communicatorText, (uint)speaker, player, CommunicatorDurationMs);
+                    });
+            }
+
+            sceneQueue.Enqueue(OutcomeMissionDelay, () => StartMission(missionId));
         }
 
         private void StartMission(uint missionId)
@@ -307,9 +304,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // sub-events are never removed after they finish, a second CreateEvent for the same id would throw
             if (publicEvent.Map.PublicEventManager.GetEvent(missionId) != null)
             {
-                log.LogInformation($"Hycrest: mission {missionId} already exists in this instance, restart the world server to try it again.");
+                log.LogInformation($"Hycrest: mission {missionId} already exists in this instance, start a new instance to play it again.");
                 return;
             }
+
+            if (!HycrestMissions.TryGetTierAndTrack(missionId, out int missionTier, out HycrestTrack track))
+                return;
 
             mission = publicEvent.Map.PublicEventManager.CreateEvent(missionId);
             if (mission == null)
@@ -318,10 +318,105 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
             }
 
+            tier = missionTier;
+            tracks[missionTier] = track;
+
             foreach (IPlayer player in mapInstance.GetPlayers())
                 HycrestPublicEvent.JoinPublicTeam(mission, player);
 
-            log.LogInformation($"Hycrest: started mission {missionId} with {mapInstance.PlayerCount} player(s).");
+            log.LogInformation($"Hycrest: started mission {missionId} (tier {missionTier + 1}, {track}) with {mapInstance.PlayerCount} player(s).");
+        }
+
+        /// <summary>
+        /// Invoked when a mission has finished.
+        /// </summary>
+        public void OnMissionFinished(IPublicEvent finished)
+        {
+            // may be invoked during the public event manager update, see OnVoteFinished
+            uint missionId = finished.Id;
+            sceneQueue.Enqueue(TimeSpan.Zero, () => AfterMission(finished, missionId));
+        }
+
+        private void AfterMission(IPublicEvent finished, uint missionId)
+        {
+            finished.InvokeScriptCollection<IHycrestMissionScript>(s => s.OnMissionEnded());
+            if (mission == finished)
+                mission = null;
+
+            if (!HycrestMissions.TryGetTierAndTrack(missionId, out int missionTier, out HycrestTrack track))
+                return;
+
+            log.LogInformation($"Hycrest: mission {missionId} (tier {missionTier + 1}, {track}) finished.");
+
+            if (missionTier == HycrestMissions.FinaleTier)
+            {
+                CompleteRun();
+                return;
+            }
+
+            // the finale follows the tier 4 track right away, it starts where the tier 4 mission ended
+            if (missionTier == HycrestMissions.FinaleTier - 1)
+            {
+                sceneQueue.Enqueue(NextMissionDelay, () => StartMission(HycrestMissions.GetMission(HycrestMissions.FinaleTier, track)));
+                return;
+            }
+
+            StartRegroup(HycrestMissions.RegroupAfter[missionId]);
+        }
+
+        private void StartRegroup(uint objectiveId)
+        {
+            if (regroup == null)
+            {
+                regroup = publicEvent.Map.PublicEventManager.CreateEvent(HycrestPublicEvent.Regroup);
+                if (regroup == null)
+                {
+                    log.LogError($"Hycrest: failed to create regroup event {HycrestPublicEvent.Regroup}.");
+                    return;
+                }
+
+                foreach (IPlayer player in mapInstance.GetPlayers())
+                    HycrestPublicEvent.JoinPublicTeam(regroup, player);
+            }
+
+            regroup.InvokeScriptCollection<IHycrestRegroupScript>(s => s.StartRegroup(objectiveId, (uint)mapInstance.PlayerCount));
+        }
+
+        private void UpdateRegroupParticipants()
+        {
+            regroup?.InvokeScriptCollection<IHycrestRegroupScript>(s => s.SetParticipants((uint)mapInstance.PlayerCount));
+        }
+
+        /// <summary>
+        /// Invoked when the players have regrouped at the hideout.
+        /// </summary>
+        public void OnRegroupComplete()
+        {
+            sceneQueue.Enqueue(TimeSpan.Zero, NextTier);
+        }
+
+        private void NextTier()
+        {
+            int nextTier = tier + 1;
+            log.LogInformation($"Hycrest: regrouped, tier {nextTier + 1} next.");
+
+            // the interlude isn't voted: it follows from the tracks of tier 1 and 2
+            if (nextTier == HycrestMissions.InterludeTier)
+            {
+                HycrestTrack interlude = HycrestMissions.GetInterludeTrack(tracks[0], tracks[1]);
+                StartMission(HycrestMissions.GetMission(nextTier, interlude));
+                return;
+            }
+
+            uint voteId = HycrestMissions.GetVote(nextTier, tracks[HycrestMissions.InterludeTier]);
+            if (voteId != 0u)
+                StartVote(voteId);
+        }
+
+        private void CompleteRun()
+        {
+            log.LogInformation($"Hycrest: run complete ({string.Join(", ", tracks)}).");
+            publicEvent.Finish(PublicEventTeam.PublicTeam);
         }
     }
 }

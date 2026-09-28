@@ -2,7 +2,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
     public enum PublicEventCreature
     {
-        IntroSetShip      = 70557,
         DominionDropship  = 17722,
         DropshipDoorRight = 18338,
         DropshipDoorLeft  = 28509,

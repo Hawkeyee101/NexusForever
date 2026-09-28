@@ -9,7 +9,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// <remarks>
     /// The ship is the Dominion Imperium Transport 17722 (confirmed against the retail videos), with the door entities
     /// 18338 and 28509 over its always-open doorways, like retail. Offsets were measured in game on summoned copies
-    /// (27 Sep 2026) and are in the ship's own frame (right ramp along +X, doorway at -17 m); a yaw r turns a local
+    /// and are in the ship's own frame (right ramp along +X, doorway at -17 m); a yaw r turns a local
     /// offset (x, z) into world (x cos r + z sin r, -x sin r + z cos r). The ship is turned -90 degrees so the right ramp
     /// points north and its lower end touches down in front of the Abandoned Barn.
     /// </remarks>
@@ -35,7 +35,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public static readonly TimeSpan TurnDuration = TimeSpan.FromSeconds(5);
 
         // the turn starts this long (ms) before the ship reaches the hover point, and it banks (rolls) this much (radians,
-        // about 10 degrees) halfway through; negative leans into the right turn (+0.17 leaned left, 28 Sep 2026)
+        // about 10 degrees) halfway through; negative leans into the right turn
         public const uint TurnLead = 1500u;
         public const float TurnBank = -0.17f;
 
@@ -87,7 +87,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         /// <remarks>
         /// Used to tell if a player has left the ship: the client's platform reports can't be relied on (they stopped while
-        /// the ship flew with the player standing on it, 28 Sep 2026).
+        /// the ship flew with the player standing on it).
         /// </remarks>
         public static bool IsAboard(Vector3 local)
         {

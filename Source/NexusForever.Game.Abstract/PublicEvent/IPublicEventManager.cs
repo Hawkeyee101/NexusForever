@@ -56,6 +56,11 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void OnRemoveFromMap(IGridEntity gridEntity);
 
         /// <summary>
+        /// Invoked when a <see cref="IUnitEntity"/> on the owner <see cref="IBaseMap"/> is killed.
+        /// </summary>
+        void OnEntityKilled(IUnitEntity unit);
+
+        /// <summary>
         /// Update any objective for any public event <see cref="IPlayer"/> is part of that meets the supplied <see cref="PublicEventObjectiveType"/>, objectId and count.
         /// </summary>
         void UpdateObjective(IPlayer player, PublicEventObjectiveType type, uint objectId, int count);
