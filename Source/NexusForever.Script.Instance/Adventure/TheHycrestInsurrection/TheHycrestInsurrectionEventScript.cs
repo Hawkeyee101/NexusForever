@@ -74,6 +74,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const double MinLineSeconds = 3d;
         private const double CharactersPerSecond = 20d;
 
+        // first barn (from the retail video): Vesna starts while Ayita's arrival line is still up, and the briefing
+        // runs faster, each line this much shorter (never shorter than the minimum gap)
+        private const double BarnBriefingOverlapStart = 2d;
+        private static readonly TimeSpan BarnLineShortening = TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan BarnMinLineGap = TimeSpan.FromSeconds(1.5);
+
         private const uint CommunicatorDurationMs = 10000u;
         private static readonly TimeSpan OutcomeCommunicatorDelay = TimeSpan.FromSeconds(1.5);
         private static readonly TimeSpan OutcomeMissionDelay = TimeSpan.FromSeconds(3);
@@ -254,7 +260,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// <summary>
         /// Queue <paramref name="lines"/> one after another starting after <paramref name="start"/>, returns when the last line ends.
         /// </summary>
-        private TimeSpan QueueLines(TimeSpan start, IEnumerable<(PublicEventCreature Speaker, uint TextId)> lines, bool whileVoting = false)
+        private TimeSpan QueueLines(TimeSpan start, IEnumerable<(PublicEventCreature Speaker, uint TextId)> lines, bool whileVoting = false,
+            TimeSpan shortening = default)
         {
             TimeSpan time = start;
             foreach ((PublicEventCreature speaker, uint textId) in lines)
@@ -265,7 +272,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     if (!whileVoting || voteInProgress)
                         dialogue.Say(GetNpc(speaker), textId, UsesGesture(speaker));
                 });
-                time += GetLineDuration(textId);
+                TimeSpan duration = GetLineDuration(textId) - shortening;
+                time += shortening > TimeSpan.Zero && duration < BarnMinLineGap ? BarnMinLineGap : duration;
             }
 
             return time;
@@ -280,7 +288,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             barnArrivalPlayed  = true;
-            barnArrivalLineEnd = sceneClock + GetLineDuration(BarnArrivalLine).TotalSeconds;
+            barnArrivalLineEnd = sceneClock + BarnBriefingOverlapStart;
             dialogue.Say(GetNpc(PublicEventCreature.AyitaSinnatus), BarnArrivalLine, gesture: false);
         }
 
@@ -290,11 +298,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public void OnIntroComplete()
         {
             // everyone is gathered: Vesna's briefing, the three pitches, then the vote
-            // solo, the first arrival also completes 189, so wait for Ayita's arrival line to finish
+            // solo, the first arrival also completes 189: Vesna starts shortly after Ayita's arrival line, while it is still up
             TimeSpan start = TimeSpan.FromSeconds(Math.Max(0d, barnArrivalLineEnd - sceneClock));
             SetBarnDoors(StandState.State0, near: GetObjectiveLocation(HycrestMissions.RegroupAbandonedBarn));
-            TimeSpan time = QueueLines(start, BarnBriefing);
-            time = QueueLines(time, MissionVotePitches);
+            TimeSpan time = QueueLines(start, BarnBriefing, shortening: BarnLineShortening);
+            time = QueueLines(time, MissionVotePitches, shortening: BarnLineShortening);
             sceneQueue.Enqueue(time, () => StartVote(HycrestMissions.GetVote(0, HycrestTrack.Tactical)));
         }
 
