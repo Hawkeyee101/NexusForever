@@ -409,14 +409,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         {
             actionQueue.Update(lastTick);
 
+            // the enemies stay in the fields after the mission (KeepAfterMission) and go on patrolling and watching
+            LinkAggro(millitheaGuards);
+            UpdateWalks(lastTick);
+            UpdateSpotlights(lastTick);
+
             if (publicEvent.HasFinished)
                 return;
 
-            LinkAggro(millitheaGuards);
-            UpdateWalks(lastTick);
             UpdateMillithea();
             UpdatePrema();
-            UpdateSpotlights(lastTick);
             UpdateAlarm(lastTick);
         }
 
@@ -712,6 +714,18 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private bool IsPlayerNear(Vector3 position, float range)
         {
             return mapInstance.GetPlayers().Any(p => Vector3.Distance(p.Position, position) <= range);
+        }
+
+        // enemies of the adventure's hostile faction stay after the mission (the fields stay occupied); the captives,
+        // Tarquim and the alarm's flare and drill go
+        private const uint HostileFaction = 1452u;
+
+        /// <summary>
+        /// Return true if <paramref name="entity"/> stays in the world after the mission.
+        /// </summary>
+        protected override bool KeepAfterMission(IGridEntity entity)
+        {
+            return entity is IUnitEntity unit && (uint)unit.Faction1 == HostileFaction;
         }
 
         /// <summary>
