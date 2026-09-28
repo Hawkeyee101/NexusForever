@@ -88,6 +88,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         }
 
         /// <summary>
+        /// Invoked when the hideout's barn closes after the mission: what stayed (e.g. the enemies) goes now.
+        /// </summary>
+        public virtual void OnHideoutClosed()
+        {
+            foreach (IGridEntity entity in publicEvent.GetEntities().ToList())
+                if (entity.InWorld)
+                    entity.RemoveFromMap();
+        }
+
+        /// <summary>
         /// Return true if <paramref name="entity"/> stays in the world after the mission, e.g. a rescued NPC at their home.
         /// </summary>
         protected virtual bool KeepAfterMission(IGridEntity entity)

@@ -613,6 +613,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public void OnRegroupComplete()
         {
+            // the barn closes: the finished mission's remaining spawns (its enemies) go now
+            mission?.InvokeScriptCollection<IHycrestMissionScript>(s => s.OnHideoutClosed());
+
             CloseBarnDoor(regroupObjective);
             sceneQueue.Enqueue(TimeSpan.Zero, NextTier);
         }

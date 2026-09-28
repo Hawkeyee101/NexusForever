@@ -716,8 +716,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             return mapInstance.GetPlayers().Any(p => Vector3.Distance(p.Position, position) <= range);
         }
 
-        // enemies of the adventure's hostile faction stay after the mission (the fields stay occupied); the captives,
-        // Tarquim and the alarm's flare and drill go
+        // enemies of the adventure's hostile faction stay after the mission until the hideout's barn closes; the
+        // captives, Tarquim and the alarm's flare and drill go right away
         private const uint HostileFaction = 1452u;
 
         /// <summary>

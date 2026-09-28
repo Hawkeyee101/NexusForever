@@ -49,5 +49,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// Invoked when the mission has finished: remove what shouldn't stay in the world.
         /// </summary>
         void OnMissionEnded();
+
+        /// <summary>
+        /// Invoked when the hideout's barn closes after the mission (the regroup is complete): remove what stayed.
+        /// </summary>
+        void OnHideoutClosed();
     }
 }
