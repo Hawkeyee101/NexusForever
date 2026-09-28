@@ -576,11 +576,6 @@ namespace NexusForever.Game.PublicEvent
             if (!entityFactory.Contains(entity))
                 return;
 
-            // the event's NPCs that are targets of an active objective are shown as such (e.g. a Talk To NPC)
-            if (entity is IWorldEntity worldEntity)
-                foreach (IPublicEventObjective objective in GetAllObjectives())
-                    objective.MarkUnit(worldEntity);
-
             // units the event spawns while an Exterminate objective is active count for it too (e.g. waves)
             if (entity is not IUnitEntity unit)
                 return;
@@ -595,10 +590,7 @@ namespace NexusForever.Game.PublicEvent
         public void OnEntityRemovedFromMap(IGridEntity entity)
         {
             foreach (IPublicEventObjective objective in GetAllObjectives())
-            {
                 objective.OnTargetRemoved(entity.Guid, false);
-                objective.UnmarkUnit(entity.Guid);
-            }
         }
 
         /// <summary>

@@ -50,20 +50,9 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void SetLocations(IEnumerable<uint> worldLocation2Ids);
 
         /// <summary>
-        /// Send the objective's map locations and target units to <see cref="IPlayer"/>, e.g. after joining the event.
+        /// Send the objective's map locations to <see cref="IPlayer"/>, e.g. after joining the event.
         /// </summary>
         void SendMarkers(IPlayer player);
-
-        /// <summary>
-        /// Show <see cref="IWorldEntity"/> as a target of the active objective if its creature is in the objective's target
-        /// group, e.g. a unit the event spawned.
-        /// </summary>
-        void MarkUnit(IWorldEntity entity);
-
-        /// <summary>
-        /// Forget a unit that left the map.
-        /// </summary>
-        void UnmarkUnit(uint guid);
 
         /// <summary>
         /// Set the dynamic max of an active objective, for example when participants join or leave.
