@@ -26,6 +26,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const float TriggerRange = 10f;
         private const uint TriggerId = 114910u;
 
+        // measured hideouts: the trigger is a sphere, so it is kept small and centred on the NPCs inside the building
+        // (the table point with 10 m also caught players outside the walls)
+        private const float InsideTriggerRange = 4f;
+        private static readonly Dictionary<uint, Vector3> InsideTriggerPositions = new()
+        {
+            [HycrestMissions.RegroupAbandonedBarn] = new(-2525.34f, -925.82f, -1190.13f),
+            [HycrestMissions.RegroupSinnatusBarn]  = new(-2391.63f, -926.28f, -1527.55f)
+        };
+
         private IPublicEvent publicEvent;
         private IMapInstance mapInstance;
 
@@ -76,9 +85,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             if (trigger?.InWorld == true)
                 trigger.RemoveFromMap();
 
+            bool inside = InsideTriggerPositions.TryGetValue(objectiveId, out Vector3 position);
+            if (!inside)
+                position = new Vector3(location.Position0, location.Position1, location.Position2);
+
             trigger = publicEvent.CreateEntity<IVolumeGridTriggerEntity>();
-            trigger.Initialise(TriggerId, TriggerRange, entry.ObjectId);
-            trigger.AddToMap(mapInstance, new Vector3(location.Position0, location.Position1, location.Position2));
+            trigger.Initialise(TriggerId, inside ? InsideTriggerRange : TriggerRange, entry.ObjectId);
+            trigger.AddToMap(mapInstance, position);
 
             log.LogInformation($"Hycrest: regroup at objective {objectiveId} (location {entry.WorldLocation2Id}) for {participants} player(s).");
         }

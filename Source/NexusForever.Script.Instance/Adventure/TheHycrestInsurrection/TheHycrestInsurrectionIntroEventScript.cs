@@ -25,11 +25,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     [ScriptFilterOwnerId(HycrestPublicEvent.Intro)]
     public class TheHycrestInsurrectionIntroEventScript : IPublicEventScript, IOwnedScript<IPublicEvent>, IHycrestArrivalScript
     {
-        // objective 189 is a ParticipantsInTriggerVolume objective with object id 1994 at WorldLocation2 13091 (radius 1)
+        // objective 189 is a ParticipantsInTriggerVolume objective with object id 1994 at WorldLocation2 13091 (radius 1);
+        // the trigger is a sphere, so it is kept small and centred where Vesna, Ayita and Lysion stand, inside the barn
+        // (8 m around 13091 also caught players standing outside the walls)
         private const uint BarnTriggerId = 114902u;
         private const uint BarnTriggerObjectId = 1994u;
-        private const float BarnTriggerRange = 8f;
-        private static readonly Vector3 BarnTriggerPosition = new(-2526.80f, -925.82f, -1190.93f);
+        private const float BarnTriggerRange = 4f;
+        private static readonly Vector3 BarnTriggerPosition = new(-2525.34f, -925.82f, -1190.13f);
 
         // Vice-Marshal Dawson's briefing, spoken to the whole ship during the 20 s objective 2155
         private static readonly (TimeSpan Delay, uint TextId)[] DawsonBriefing =
