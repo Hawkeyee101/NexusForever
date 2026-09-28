@@ -69,6 +69,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private static readonly TimeSpan SpotlightPulseInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan SpotlightCooldown = TimeSpan.FromSeconds(5.5);
 
+        // tracking: a player within the aggro range pulls the spotlight off its lane towards them, slower than a running
+        // player; it gives up (hard cap) when the player is further than the drop range from it or it would leave its
+        // lane by more than the leash, then returns to the nearest point of its lane and patrols on
+        private const float SpotlightAggroRange = 10f;
+        private const float SpotlightDropRange = 16f;
+        private const float SpotlightLeash = 15f;
+        private const float SpotlightTrackSpeed = 3.5f;
+        private const float SpotlightReturnSpeed = 4f;
+        private static readonly TimeSpan SpotlightRetrackInterval = TimeSpan.FromSeconds(0.5);
+
         // the alarm: crossing this line (spline 4648, 77 m across the field north of Millithea) calls a Recon Specialist
         // this far from the party, towards Prema. Retail's trigger isn't in the tables; the specialist was measured at
         // -2413, -1587, between Millithea and Prema
@@ -88,9 +98,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             [new(-2381.129f, -923.09406f, -1698.4329f), new(-2348.2769f, -923.348f, -1698.5614f)]
         ];
 
-        // spotlight lanes: spawn position and the other end (the first spotlight's route isn't known yet, it stands still)
+        // spotlight lanes: spawn position and the other end
         private static readonly Vector3[][] SpotlightLanes =
         [
+            [new(-2521.6794f, -927.764f, -1365.4867f), new(-2469.8152f, -924.95306f, -1307.9954f)],
             [new(-2468.567f, -929.0733f, -1593.2743f), new(-2470.2705f, -925.0637f, -1659.7626f)],
             [new(-2490.1282f, -920.8113f, -1672.5258f), new(-2492.663f, -929.0888f, -1607.7689f)],
             [new(-2402.416f, -928.3815f, -1673.6968f), new(-2401.0205f, -927.10114f, -1683.4856f)]
@@ -201,32 +212,64 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                     responsebotGuid = worldEntity.Guid;
                     break;
                 case DominionScout:
-                    StartRoute(worldEntity, Patrols, PatrolSpeed);
+                {
+                    List<Vector3> loop = GetLoop(worldEntity.Position, Patrols);
+                    if (loop != null)
+                        LaunchLoop(worldEntity, loop, 0, PatrolSpeed);
                     break;
+                }
                 case SpotlightTarget:
-                    spotlights[worldEntity.Guid] = new Spotlight();
-                    StartRoute(worldEntity, SpotlightLanes, SpotlightSpeed);
+                {
+                    var spotlight = new Spotlight
+                    {
+                        Loop = GetLoop(worldEntity.Position, SpotlightLanes) ?? [worldEntity.Position]
+                    };
+                    spotlights[worldEntity.Guid] = spotlight;
+                    if (spotlight.Loop.Count > 1)
+                        LaunchLoop(worldEntity, spotlight.Loop, 0, SpotlightSpeed);
                     break;
+                }
             }
         }
 
-        private static void StartRoute(IWorldEntity entity, Vector3[][] routes, float speed)
+        /// <summary>
+        /// Return the route starting where the entity spawned as a closed loop, walked there and back (A, B, C, B, A).
+        /// </summary>
+        /// <remarks>
+        /// The client jumped back to the start with BackAndForth, and a Cyclic spline has no closing segment: it wraps from
+        /// the last node to the first (A, B, C, B jumped at B on the way back), so the loop ends on its start.
+        /// </remarks>
+        private static List<Vector3> GetLoop(Vector3 spawn, Vector3[][] routes)
         {
-            // the route whose first node is where the entity spawned
-            Vector3[] route = routes.FirstOrDefault(r => Vector3.Distance(r[0], entity.Position) < 1f);
+            Vector3[] route = routes.FirstOrDefault(r => Vector3.Distance(r[0], spawn) < 1f);
             if (route == null)
-                return;
+                return null;
 
-            // walked as a loop over the route and back to the start (A, B, C, B, A): the client jumped back to the start
-            // with BackAndForth, and a Cyclic spline has no closing segment, it wraps from the last node to the first
-            // (A, B, C, B jumped at B on the way back); LaunchSpline also sets the moving state and faces the entity where
-            // it walks
-            List<Vector3> nodes = [.. route];
+            List<Vector3> loop = [.. route];
             for (int i = route.Length - 2; i >= 0; i--)
-                nodes.Add(route[i]);
+                loop.Add(route[i]);
+            return loop;
+        }
+
+        /// <summary>
+        /// Walk <paramref name="loop"/> for ever, starting at node <paramref name="start"/>.
+        /// </summary>
+        /// <remarks>
+        /// LaunchSpline also sets the moving state and faces the entity where it walks.
+        /// </remarks>
+        private static void LaunchLoop(IWorldEntity entity, List<Vector3> loop, int start, float speed)
+        {
+            List<Vector3> open = loop.Take(loop.Count - 1).ToList();
+            List<Vector3> nodes = [.. open.Skip(start), .. open.Take(start)];
+            nodes.Add(nodes[0]);
 
             entity.MovementManager.SetMode(ModeType.Walk);
             entity.MovementManager.LaunchSpline(nodes, SplineType.Linear, SplineMode.Cyclic, speed);
+        }
+
+        private static void MoveTo(IWorldEntity entity, Vector3 destination, float speed)
+        {
+            entity.MovementManager.LaunchSpline([entity.Position, destination], SplineType.Linear, SplineMode.OneShot, speed);
         }
 
         /// <summary>
@@ -316,11 +359,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private float DistanceToLine(Vector2 point)
         {
+            return DistanceToPolyline(alarmLine, point);
+        }
+
+        private static float DistanceToPolyline(List<Vector2> line, Vector2 point)
+        {
+            if (line.Count == 1)
+                return Vector2.Distance(point, line[0]);
+
             float distance = float.MaxValue;
-            for (int i = 0; i < alarmLine.Count - 1; i++)
+            for (int i = 0; i < line.Count - 1; i++)
             {
-                Vector2 a = alarmLine[i];
-                Vector2 ab = alarmLine[i + 1] - a;
+                Vector2 a = line[i];
+                Vector2 ab = line[i + 1] - a;
                 float t = ab.LengthSquared() > 0f ? Math.Clamp(Vector2.Dot(point - a, ab) / ab.LengthSquared(), 0f, 1f) : 0f;
                 distance = MathF.Min(distance, Vector2.Distance(point, a + ab * t));
             }
@@ -328,11 +379,98 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             return distance;
         }
 
+        private enum SpotlightState
+        {
+            Patrol,
+            Track,
+            Return
+        }
+
         private class Spotlight
         {
+            public List<Vector3> Loop; // one node: no lane, it stands there
+            public SpotlightState State;
+            public uint TargetGuid;
+            public double Retrack;
+            public int ReturnNode;
+
             public double Cooldown;
             public double Firing;
             public double NextPulse;
+        }
+
+        private void UpdateSpotlightMovement(IUnitEntity entity, Spotlight spotlight, double lastTick)
+        {
+            switch (spotlight.State)
+            {
+                case SpotlightState.Patrol:
+                {
+                    IPlayer target = mapInstance.GetPlayers()
+                        .Where(p => p.IsAlive
+                            && Vector3.Distance(p.Position, entity.Position) <= SpotlightAggroRange
+                            && DistanceToLoop(spotlight.Loop, p.Position) <= SpotlightLeash)
+                        .OrderBy(p => Vector3.Distance(p.Position, entity.Position))
+                        .FirstOrDefault();
+                    if (target == null)
+                        break;
+
+                    spotlight.State      = SpotlightState.Track;
+                    spotlight.TargetGuid = target.Guid;
+                    spotlight.Retrack    = 0d;
+                    break;
+                }
+                case SpotlightState.Track:
+                {
+                    IPlayer target = mapInstance.GetEntity<IPlayer>(spotlight.TargetGuid);
+                    if (target == null
+                        || !target.IsAlive
+                        || Vector3.Distance(target.Position, entity.Position) > SpotlightDropRange
+                        || DistanceToLoop(spotlight.Loop, target.Position) > SpotlightLeash)
+                    {
+                        ReturnToLane(entity, spotlight);
+                        break;
+                    }
+
+                    spotlight.Retrack -= lastTick;
+                    if (spotlight.Retrack > 0d)
+                        break;
+
+                    spotlight.Retrack = SpotlightRetrackInterval.TotalSeconds;
+                    if (Vector3.Distance(target.Position, entity.Position) > 0.5f)
+                        MoveTo(entity, target.Position, SpotlightTrackSpeed);
+                    break;
+                }
+                case SpotlightState.Return:
+                {
+                    Vector3 node = spotlight.Loop[spotlight.ReturnNode];
+                    if (Vector3.Distance(entity.Position, node) > 0.5f)
+                        break;
+
+                    spotlight.State = SpotlightState.Patrol;
+                    if (spotlight.Loop.Count > 1)
+                        LaunchLoop(entity, spotlight.Loop, spotlight.ReturnNode, SpotlightSpeed);
+                    break;
+                }
+            }
+        }
+
+        private static void ReturnToLane(IUnitEntity entity, Spotlight spotlight)
+        {
+            // the nearest node of the loop (without its closing node), patrol resumes from there
+            int count = Math.Max(1, spotlight.Loop.Count - 1);
+            spotlight.ReturnNode = Enumerable.Range(0, count)
+                .OrderBy(i => Vector3.Distance(spotlight.Loop[i], entity.Position))
+                .First();
+            spotlight.State = SpotlightState.Return;
+
+            Vector3 node = spotlight.Loop[spotlight.ReturnNode];
+            if (Vector3.Distance(entity.Position, node) > 0.5f)
+                MoveTo(entity, node, SpotlightReturnSpeed);
+        }
+
+        private static float DistanceToLoop(List<Vector3> loop, Vector3 position)
+        {
+            return DistanceToPolyline(loop.Select(n => new Vector2(n.X, n.Z)).ToList(), new Vector2(position.X, position.Z));
         }
 
         private void UpdateSpotlights(double lastTick)
@@ -341,6 +479,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             {
                 if (mapInstance.GetEntity<IWorldEntity>(guid) is not IUnitEntity spotlight)
                     continue;
+
+                UpdateSpotlightMovement(spotlight, state, lastTick);
 
                 // the cooldown runs from the start of the burst, as the spell's own
                 state.Cooldown -= lastTick;
