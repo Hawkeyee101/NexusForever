@@ -54,7 +54,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // screen (the arrival cinematic, 20 s); then the green "synchronisation" glow on the players and the ship, the ship
         // flies to its hover point with everyone on board, the Caretaker's lines as portrait pop-ups (10 s each) while the
         // hologram talks, then Dawson comes out of the door where the hologram was (once the ship has arrived)
-        private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(4); // HycrestInsurrectionOnEnter.BlackDuration
         private static readonly TimeSpan SyncDelay          = BlackScreen;
         private static readonly TimeSpan DawsonArrivalWait  = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan Message1Delay      = BlackScreen + TimeSpan.FromSeconds(1.5);
@@ -82,6 +82,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // has no duration (CancelOnly), so the spell is finished after SyncDuration
         private const uint SyncSpell = 62968u;
         private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
+
+        // the ship's glow: a unit copy of the ship (only units cast spells) spawned in this phase, ShipGlowLead before the
+        // players' sync so it is in place, then it casts the sync spell and is removed after it
+        private const uint ShipGlowPhase = 2u;
+        private static readonly TimeSpan ShipGlowLead = TimeSpan.FromSeconds(0.5);
 
         // the hologram talks (talk emote, Default_Talk ~4 s) while each narration message shows
         private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4)];
@@ -182,9 +187,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 case PublicEventCreature.IntroSetShip:
                     dropShip.ShipGuid = worldEntity.Guid;
                     break;
+                case PublicEventCreature.DominionDropship when worldEntity is IUnitEntity glowCopy:
+                    // the unit copy of the ship (phase ShipGlowPhase): glows green with the sync spell, then goes
+                    ShipGlow(glowCopy);
+                    break;
                 case PublicEventCreature.DominionDropship:
-                    // hovering at its start point, engines running; players enter on its deck and it flies to the hover point
-                    // with them on board after the black screen (spawned as SimpleCollidable so players stay on it)
+                    // hovering at its start point, engines running; players enter on its deck and it flies forward to the
+                    // hover point and turns, with them on board as platform passengers, after the black screen
                     dropShip.ShipGuid = worldEntity.Guid;
                     HycrestDropShip.SetState(worldEntity, StandState.State1);
                     break;
@@ -293,9 +302,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             if (!flyInQueued)
             {
+                // the ship glows with the players (its unit copy spawns just before), then flies
                 flyInQueued = true;
-                actionQueue.Enqueue(SyncDelay, StartShipSync);
-                actionQueue.Enqueue(SyncDelay, dropShip.FlyIn);
+                actionQueue.Enqueue(SyncDelay - ShipGlowLead, () => publicEvent.SetPhase(ShipGlowPhase));
+                actionQueue.Enqueue(SyncDelay + SyncDuration, dropShip.FlyIn);
             }
 
             if (dawsonAppearQueued)
@@ -303,6 +313,25 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             dawsonAppearQueued = true;
             actionQueue.Enqueue(DawsonAppearDelay, ShowDawson);
+        }
+
+        private void ShipGlow(IUnitEntity glowCopy)
+        {
+            HycrestDropShip.SetState(glowCopy, StandState.State1);
+
+            uint guid = glowCopy.Guid;
+            actionQueue.Enqueue(ShipGlowLead, () =>
+            {
+                IUnitEntity copy = mapInstance.GetEntity<IUnitEntity>(guid);
+                if (copy == null)
+                    return;
+
+                ISpellParameters parameters = spellParametersFactory.Resolve();
+                parameters.PrimaryTargetId        = copy.Guid;
+                parameters.UserInitiatedSpellCast = false;
+                copy.CastSpell(SyncSpell, parameters);
+            });
+            actionQueue.Enqueue(ShipGlowLead + SyncDuration, () => mapInstance.GetEntity<IWorldEntity>(guid)?.RemoveFromMap());
         }
 
         /// <summary>
@@ -313,21 +342,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             return dropShip?.ReserveEntry(player);
         }
 
-        private void StartShipSync()
-        {
-            // retail: the whole ship glows green as everyone synchronises; the ship is a unit (SimpleCollidable), so it can
-            // cast the sync spell on itself
-            if (mapInstance.GetEntity<IWorldEntity>(dropShip.ShipGuid) is not IUnitEntity ship)
-                return;
-
-            ISpellParameters parameters = spellParametersFactory.Resolve();
-            parameters.PrimaryTargetId        = ship.Guid;
-            parameters.UserInitiatedSpellCast = false;
-            ship.CastSpell(SyncSpell, parameters);
-
-            uint shipGuid = ship.Guid;
-            actionQueue.Enqueue(SyncDuration, () => mapInstance.GetEntity<IUnitEntity>(shipGuid)?.GetSpellBySpellId(SyncSpell)?.Finish());
-        }
 
         private void WithPlayer(uint guid, Action<IPlayer> action)
         {

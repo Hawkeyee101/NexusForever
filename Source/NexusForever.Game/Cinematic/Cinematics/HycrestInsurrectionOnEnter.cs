@@ -45,19 +45,22 @@ namespace NexusForever.Game.Cinematic.Cinematics
         // retail: a black screen with the narration typed in. The camera's fade goes to black at once, holds under the
         // narration and fades the view in as it ends. The green synchronisation glow follows outside the cinematic, like
         // retail (intro event script)
-        // held until just before the cinematic ends: a fade-in showed the camera's view (under the map) for a moment
-        private const uint   FadeInAt       = 19800u;
-        private const ushort BlackHold      = 19800;
+        // held until just before the cinematic ends: a fade-in showed the camera's view (under the map) for a moment.
+        // Short: players enter the map standing on the ship, the black only covers everything settling into place (the
+        // narration now follows as portrait pop-ups)
+        private const uint   BlackDuration  = 4000u;
+        private const uint   FadeInAt       = BlackDuration - 200u;
+        private const ushort BlackHold      = (ushort)FadeInAt;
         private const ushort BlackFadeIn    = 200;
         private const uint   FadeTransition = 2u; // 3 held white (the hold works), 1 didn't fade at all
 
         private const uint CaretakerIntroVoice = 34515u;
-        private const uint CaretakerIntroAt    = 2000u;
+        private const uint CaretakerIntroAt    = 1000u;
 
 
         protected override void Setup()
         {
-            Duration          = 20000;
+            Duration          = BlackDuration;
             InitialFlags      = FlagsOverride ?? 7;
             InitialCancelMode = CancelModeOverride ?? 0; // retail can't be skipped (2 showed "Esc to skip")
             CinematicId       = 0;
@@ -70,9 +73,6 @@ namespace NexusForever.Game.Cinematic.Cinematics
             AddActor(camera, [new VisualEffect(CinematicTimeline)]);
 
             ICamera view = new Camera(camera, 7, 0, true, FadeTransition, 0, BlackHold, BlackFadeIn);
-            // shot changes without their own transition (a cut could end the black hold early)
-            view.AddAttach(6000, 8);
-            view.AddAttach(12933, 9);
             AddCamera(view);
 
             IWorldEntity ship = Player.Map?

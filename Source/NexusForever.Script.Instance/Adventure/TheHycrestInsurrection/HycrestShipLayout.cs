@@ -25,10 +25,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         /// <summary>
         /// Where the ship spawns before flying in to <see cref="Origin"/> with the players on board: above the start point
-        /// measured in game (-2543.603, -921.8223, -1151.4386), north of the barn, at the same altitude.
+        /// measured in game (-2543.603, -921.8223, -1151.4386), north of the barn, at the same altitude. It starts facing
+        /// its flight direction (<see cref="StartYaw"/>, the nose at local -Z points to world -Z), flies forward to the
+        /// hover point and then turns to <see cref="Yaw"/> in <see cref="TurnDuration"/>.
         /// </summary>
         public static readonly Vector3 StartPoint = new(-2543.603f, -865.644f, -1151.4386f);
+        public const float StartYaw = 0f;
         public const float FlyInSpeed = 7f;
+        public static readonly TimeSpan TurnDuration = TimeSpan.FromSeconds(5);
 
         /// <summary>
         /// Departure ("jump away", State2): the ship moves forward and up. ASSUMPTION: the cockpit is at the ship's -Z end,
@@ -38,12 +42,57 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public const float DepartSpeed = 20f;
 
         /// <summary>
-        /// Return <paramref name="hoverPosition"/> (a spot given for the ship at <see cref="Origin"/>) for the ship at
-        /// <paramref name="shipPosition"/>; the ship keeps its rotation while flying.
+        /// Return the offset in the ship's own frame of <paramref name="hoverPosition"/> (a spot given for the ship at
+        /// <see cref="Origin"/> turned <see cref="Yaw"/>).
         /// </summary>
-        public static Vector3 OnShip(Vector3 hoverPosition, Vector3 shipPosition)
+        public static Vector3 ToLocal(Vector3 hoverPosition)
         {
-            return hoverPosition - Origin + shipPosition;
+            Vector3 d = hoverPosition - Origin;
+            float cos = MathF.Cos(Yaw);
+            float sin = MathF.Sin(Yaw);
+            return new Vector3(d.X * cos - d.Z * sin, d.Y, d.X * sin + d.Z * cos);
+        }
+
+        /// <summary>
+        /// Return the world position of <paramref name="local"/> (an offset in the ship's frame) for the ship at
+        /// <paramref name="shipPosition"/> turned <paramref name="shipYaw"/>.
+        /// </summary>
+        public static Vector3 ToWorld(Vector3 local, Vector3 shipPosition, float shipYaw)
+        {
+            float cos = MathF.Cos(shipYaw);
+            float sin = MathF.Sin(shipYaw);
+            return new Vector3(local.X * cos + local.Z * sin, local.Y, -local.X * sin + local.Z * cos) + shipPosition;
+        }
+
+        /// <summary>
+        /// Return the offset in the ship's own frame of <paramref name="world"/> for the ship at <paramref name="shipPosition"/>
+        /// turned <paramref name="shipYaw"/>.
+        /// </summary>
+        public static Vector3 ToShip(Vector3 world, Vector3 shipPosition, float shipYaw)
+        {
+            Vector3 d = world - shipPosition;
+            float cos = MathF.Cos(shipYaw);
+            float sin = MathF.Sin(shipYaw);
+            return new Vector3(d.X * cos - d.Z * sin, d.Y, d.X * sin + d.Z * cos);
+        }
+
+        /// <summary>
+        /// Return true if <paramref name="local"/> (an offset in the ship's frame) is on the deck, inside the hull.
+        /// </summary>
+        public static bool IsOnDeck(Vector3 local)
+        {
+            return MathF.Abs(local.Y - (FloorY - Origin.Y)) < 2.5f
+                && MathF.Abs(local.X) < 12f
+                && MathF.Abs(local.Z) < 25f;
+        }
+
+        /// <summary>
+        /// Return <paramref name="hoverPosition"/> (a spot given for the ship at <see cref="Origin"/>) for the ship at
+        /// <paramref name="shipPosition"/> turned <paramref name="shipYaw"/>.
+        /// </summary>
+        public static Vector3 OnShip(Vector3 hoverPosition, Vector3 shipPosition, float shipYaw)
+        {
+            return ToWorld(ToLocal(hoverPosition), shipPosition, shipYaw);
         }
 
         /// <summary>

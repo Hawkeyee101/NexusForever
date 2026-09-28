@@ -173,7 +173,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             PlayerDrop drop = players[player.CharacterId];
             drop.EnteredOnDeck = true;
 
-            return HycrestShipLayout.OnShip(drop.Spot, Arrived ? HycrestShipLayout.Origin : HycrestShipLayout.StartPoint);
+            return Arrived
+                ? drop.Spot
+                : HycrestShipLayout.OnShip(drop.Spot, HycrestShipLayout.StartPoint, HycrestShipLayout.StartYaw);
         }
 
         /// <summary>
@@ -209,35 +211,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Put the ship, the doors and the hologram at the hover point at once, instead of <see cref="FlyIn"/>: for an
-        /// arrival where nobody would see the fly-in.
+        /// Fly the ship with everyone on board from its start point forward to its hover point, then turn it right into its
+        /// hover rotation (see <see cref="Arrived"/>).
         /// </summary>
-        public void PlaceAtHover()
-        {
-            if (FlewIn || Departed)
-                return;
-
-            FlewIn  = true;
-            Arrived = true;
-
-            IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
-            if (ship == null)
-                return;
-
-            Vector3 delta = HycrestShipLayout.Origin - ship.Position;
-            foreach (uint guid in new[] { ShipGuid, RightDoorGuid, LeftDoorGuid, HologramGuid })
-            {
-                IWorldEntity entity = map.GetEntity<IWorldEntity>(guid);
-                entity?.MovementManager.SetPosition(entity.Position + delta, false);
-            }
-
-            log.LogInformation("Hycrest: drop ship placed at its hover point.");
-        }
-
-        /// <summary>
-        /// Fly the ship from its start point to its hover point, before anyone is on board (see <see cref="Arrived"/>).
-        /// The doors and the hologram aren't attached to it, so they fly the same path at the same speed.
-        /// </summary>
+        /// <remarks>
+        /// The doors, the hologram and the players on the deck become platform passengers of the ship: their positions are
+        /// relative to it, so clients move and turn them with the ship.
+        /// </remarks>
         public void FlyIn()
         {
             if (FlewIn || Departed)
@@ -252,24 +232,45 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
             }
 
-            Vector3 delta = HycrestShipLayout.Origin - ship.Position;
-            if (delta.Length() < 1f)
-            {
-                Arrived = true;
+            AttachToShip(ship, RightDoorGuid, HycrestShipLayout.DoorPoint, HycrestShipLayout.Yaw);
+            AttachToShip(ship, LeftDoorGuid, HycrestShipLayout.DoorPoint, HycrestShipLayout.Yaw);
+            AttachToShip(ship, HologramGuid, HycrestShipLayout.HologramSpot, HycrestShipLayout.HologramYaw);
+
+            foreach (IPlayer player in map.GetPlayers())
+                if (players.TryGetValue(player.CharacterId, out PlayerDrop drop) && drop.Boarded && drop.State == DropState.OnBoard)
+                    AttachPlayer(player, ship);
+
+            float distance = Vector3.Distance(ship.Position, HycrestShipLayout.Origin);
+            uint flyMs  = (uint)(distance / HycrestShipLayout.FlyInSpeed * 1000f);
+            uint turnMs = (uint)HycrestShipLayout.TurnDuration.TotalMilliseconds;
+
+            ship.MovementManager.SetPositionKeys([0u, flyMs], [ship.Position, HycrestShipLayout.Origin]);
+            ship.MovementManager.SetRotationKeys([0u, flyMs, flyMs + turnMs],
+                [ship.Rotation, ship.Rotation, new Vector3(HycrestShipLayout.Yaw, 0f, 0f)]);
+
+            // a moment of margin for the keys to settle before late players are put on board
+            actionQueue.Enqueue(TimeSpan.FromMilliseconds(flyMs + turnMs + 500u), () => Arrived = true);
+
+            log.LogInformation($"Hycrest: drop ship flying in ({distance:0} m), then turning.");
+        }
+
+        private void AttachToShip(IWorldEntity ship, uint guid, Vector3 hoverPosition, float hoverYaw)
+        {
+            IWorldEntity entity = map.GetEntity<IWorldEntity>(guid);
+            entity?.SetPlatform(ship, HycrestShipLayout.ToLocal(hoverPosition), new Vector3(hoverYaw - HycrestShipLayout.Yaw, 0f, 0f));
+        }
+
+        private static void AttachPlayer(IPlayer player, IWorldEntity ship)
+        {
+            Vector3 local = HycrestShipLayout.ToShip(player.Position, ship.Position, ship.Rotation.X);
+            if (!HycrestShipLayout.IsOnDeck(local))
                 return;
-            }
 
-            // a moment of margin for the spline to settle before players are put on board
-            actionQueue.Enqueue(TimeSpan.FromSeconds(delta.Length() / HycrestShipLayout.FlyInSpeed + 0.5d), () => Arrived = true);
-
-            foreach (uint guid in new[] { ShipGuid, RightDoorGuid, LeftDoorGuid, HologramGuid })
-            {
-                IWorldEntity entity = map.GetEntity<IWorldEntity>(guid);
-                entity?.MovementManager.SetPositionPath([entity.Position, entity.Position + delta], SplineType.Linear,
-                    SplineMode.OneShot, HycrestShipLayout.FlyInSpeed);
-            }
-
-            log.LogInformation($"Hycrest: drop ship flying in ({delta.Length():0} m).");
+            // like a teleport: the server sets the position (now relative to the ship) while it has control
+            player.SetControl(null);
+            player.SetPlatform(ship, local, new Vector3(player.Rotation.X - ship.Rotation.X, 0f, 0f));
+            player.MovementManager.BroadcastNetworkEntityCommands();
+            player.SetControl(player);
         }
 
         /// <summary>
@@ -283,12 +284,21 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             Departed = true;
             OpenDoors();
 
+            IWorldEntity departingShip = map.GetEntity<IWorldEntity>(ShipGuid);
             foreach (IPlayer player in map.GetPlayers())
             {
                 if (!players.TryGetValue(player.CharacterId, out PlayerDrop drop)
                     || drop.State != DropState.OnBoard
                     || !drop.Boarded)
                     continue;
+
+                // only players actually still on the deck: someone who already fell or walked off stays where they are
+                if (departingShip != null
+                    && !HycrestShipLayout.IsOnDeck(HycrestShipLayout.ToShip(player.Position, departingShip.Position, departingShip.Rotation.X)))
+                {
+                    drop.State = DropState.Landed;
+                    continue;
+                }
 
                 StartFalling(player, drop);
                 player.TeleportToLocal(HycrestShipLayout.DropPoint, false);
@@ -379,7 +389,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     SinceFirstBoard ??= 0d;
                     // spots are given for the ship at its hover point; it may still be at its start point or flying in
                     IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
-                    Vector3 spot = ship != null ? HycrestShipLayout.OnShip(drop.Spot, ship.Position) : drop.Spot;
+                    Vector3 spot = ship != null ? HycrestShipLayout.OnShip(drop.Spot, ship.Position, ship.Rotation.X) : drop.Spot;
                     player.TeleportToLocal(spot, BoardWithLoadingScreen);
                     PlayerBoarded?.Invoke(player);
                     continue;
