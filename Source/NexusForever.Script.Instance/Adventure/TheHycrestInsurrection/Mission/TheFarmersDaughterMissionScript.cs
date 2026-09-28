@@ -162,8 +162,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             if (route == null)
                 return;
 
+            // walked as a loop over the route and back (A, B, C, B), the client jumped back to the start with BackAndForth;
+            // LaunchSpline also sets the moving state and faces the entity where it walks
+            List<Vector3> nodes = [.. route];
+            for (int i = route.Length - 2; i > 0; i--)
+                nodes.Add(route[i]);
+
             entity.MovementManager.SetMode(ModeType.Walk);
-            entity.MovementManager.SetPositionPath([.. route], SplineType.Linear, SplineMode.BackAndForth, speed);
+            entity.MovementManager.LaunchSpline(nodes, SplineType.Linear, SplineMode.Cyclic, speed);
         }
 
         /// <summary>
