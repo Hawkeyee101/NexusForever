@@ -11,6 +11,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         LysionSinnatus    = 17777,
         ExitSimulation    = 36869,
         TheCaretaker      = 53309,
-        CaretakerHologram = 56685
+        CaretakerHologram = 56685,
+        BarnDoor          = 51064
     }
 }

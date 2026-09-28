@@ -173,6 +173,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             if (entity is not IWorldEntity worldEntity || !IsOwnEntity(entity))
                 return;
 
+            // weapons away until they fight: a unit's Sheathed stat is only set when its combat state changes, so units
+            // that haven't fought yet held their rifles drawn
+            if (worldEntity is IUnitEntity { InCombat: false } && worldEntity.CreatureId != SpotlightTarget)
+                worldEntity.Sheathed = true;
+
             switch (worldEntity.CreatureId)
             {
                 case Tarquim:
@@ -212,10 +217,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             if (route == null)
                 return;
 
-            // walked as a loop over the route and back (A, B, C, B), the client jumped back to the start with BackAndForth;
-            // LaunchSpline also sets the moving state and faces the entity where it walks
+            // walked as a loop over the route and back to the start (A, B, C, B, A): the client jumped back to the start
+            // with BackAndForth, and a Cyclic spline has no closing segment, it wraps from the last node to the first
+            // (A, B, C, B jumped at B on the way back); LaunchSpline also sets the moving state and faces the entity where
+            // it walks
             List<Vector3> nodes = [.. route];
-            for (int i = route.Length - 2; i > 0; i--)
+            for (int i = route.Length - 2; i >= 0; i--)
                 nodes.Add(route[i]);
 
             entity.MovementManager.SetMode(ModeType.Walk);

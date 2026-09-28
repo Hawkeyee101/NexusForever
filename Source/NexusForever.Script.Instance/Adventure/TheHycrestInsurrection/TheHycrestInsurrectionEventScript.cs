@@ -168,6 +168,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 case PublicEventCreature.LysionSinnatus:
                     npcGuids[creature] = worldEntity.Guid;
                     break;
+                case PublicEventCreature.BarnDoor:
+                    // open while players arrive, closed for the briefing and the vote (retail video)
+                    npcGuids[creature] = worldEntity.Guid;
+                    worldEntity.StandState = StandState.State1;
+                    break;
                 case PublicEventCreature.AyitaSinnatus:
                 {
                     npcGuids[creature] = worldEntity.Guid;
@@ -229,6 +234,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // everyone is gathered: Vesna's briefing, the three pitches, then the vote
             // solo, the first arrival also completes 189, so wait for Ayita's arrival line to finish
             TimeSpan start = TimeSpan.FromSeconds(Math.Max(0d, barnArrivalLineEnd - sceneClock));
+            HycrestDropShip.SetState(GetNpc(PublicEventCreature.BarnDoor), StandState.State0);
             TimeSpan time = QueueLines(start, BarnBriefing);
             time = QueueLines(time, MissionVotePitches);
             sceneQueue.Enqueue(time, () => StartVote(HycrestMissions.GetVote(0, HycrestTrack.Tactical)));
@@ -320,6 +326,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             tier = missionTier;
             tracks[missionTier] = track;
+
+            HycrestDropShip.SetState(GetNpc(PublicEventCreature.BarnDoor), StandState.State1);
 
             foreach (IPlayer player in mapInstance.GetPlayers())
                 HycrestPublicEvent.JoinPublicTeam(mission, player);
