@@ -282,10 +282,38 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             if (publicEvent.HasFinished)
                 return;
 
+            LinkAggro(millitheaGuards);
             UpdateMillithea();
             UpdatePrema();
             UpdateSpotlights(lastTick);
             UpdateAlarm(lastTick);
+        }
+
+        /// <summary>
+        /// A guard group fights together: when one of them is in combat, the others join in against the same players.
+        /// </summary>
+        private void LinkAggro(IEnumerable<uint> group)
+        {
+            List<IUnitEntity> guards = group
+                .Select(guid => mapInstance.GetEntity<IWorldEntity>(guid))
+                .OfType<IUnitEntity>()
+                .Where(u => u.IsAlive)
+                .ToList();
+
+            List<IUnitEntity> hated = guards
+                .Where(u => u.InCombat)
+                .SelectMany(u => u.ThreatManager)
+                .Select(h => mapInstance.GetEntity<IWorldEntity>(h.HatedUnitId))
+                .OfType<IUnitEntity>()
+                .Where(u => u.IsAlive)
+                .Distinct()
+                .ToList();
+            if (hated.Count == 0)
+                return;
+
+            foreach (IUnitEntity guard in guards.Where(u => !u.InCombat))
+                foreach (IUnitEntity target in hated)
+                    guard.ThreatManager.UpdateThreat(target, 1);
         }
 
         private void UpdateMillithea()
