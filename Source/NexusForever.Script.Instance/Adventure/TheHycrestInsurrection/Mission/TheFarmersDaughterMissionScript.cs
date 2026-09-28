@@ -99,7 +99,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         // dev: show the alarm line in game with ground light circles (the spotlight's light, display 23754, on the
         // harmless Visual Fluff Spotlight creature) every few metres; set to false once the trigger is settled
-        private const bool ShowAlarmLine = true;
+        private const bool ShowAlarmLine = false;
         private const uint AlarmLineMarker = 28723u;
         private const uint AlarmLineMarkerDisplay = 23754u;
         private const float AlarmLineMarkerSpacing = 4f;
@@ -303,7 +303,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private class Walk
         {
             public List<Vector3> Loop;
+            public List<Vector3> Nodes;
             public float Speed;
+            public double Duration;
             public double Remaining;
         }
 
@@ -344,7 +346,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             walks[entity.Guid] = new Walk
             {
                 Loop      = loop,
+                Nodes     = nodes,
                 Speed     = speed,
+                Duration  = length / speed,
                 Remaining = length / speed + 0.25d
             };
         }
@@ -547,6 +551,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             public uint TargetGuid;
             public double Retrack;
             public int ReturnNode;
+            public Vector3? ResumePosition;
 
             public double Cooldown;
             public double Firing;
@@ -568,6 +573,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                     if (target == null)
                         break;
 
+                    RememberLanePosition(entity, spotlight);
                     walks.Remove(entity.Guid);
                     spotlight.State      = SpotlightState.Track;
                     spotlight.TargetGuid = target.Guid;
@@ -597,11 +603,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 }
                 case SpotlightState.Return:
                 {
-                    Vector3 node = spotlight.Loop[spotlight.ReturnNode];
+                    Vector3 node = spotlight.ResumePosition ?? spotlight.Loop[spotlight.ReturnNode];
                     if (Vector3.Distance(entity.Position, node) > 0.5f)
                         break;
 
-                    spotlight.State = SpotlightState.Patrol;
+                    spotlight.State          = SpotlightState.Patrol;
+                    spotlight.ResumePosition = null;
                     if (spotlight.Loop.Count > 1)
                         LaunchLoop(entity, spotlight.Loop, spotlight.ReturnNode, SpotlightSpeed);
                     break;
@@ -609,13 +616,40 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             }
         }
 
+        /// <summary>
+        /// Remember where on its lane the spotlight was and which node it was heading to, it resumes there after tracking.
+        /// </summary>
+        private void RememberLanePosition(IUnitEntity entity, Spotlight spotlight)
+        {
+            spotlight.ResumePosition = null;
+            if (!walks.TryGetValue(entity.Guid, out Walk walk))
+                return;
+
+            // distance walked in this round, then the segment it is on
+            double walked = Math.Clamp(walk.Duration - walk.Remaining + 0.25d, 0d, walk.Duration) * walk.Speed;
+            int next = walk.Nodes.Count - 1;
+            for (int i = 1; i < walk.Nodes.Count; i++)
+            {
+                walked -= Vector3.Distance(walk.Nodes[i - 1], walk.Nodes[i]);
+                if (walked <= 0d)
+                {
+                    next = i;
+                    break;
+                }
+            }
+
+            spotlight.ResumePosition = entity.Position;
+            spotlight.ReturnNode     = NearestNode(spotlight.Loop, walk.Nodes[next]);
+        }
+
         private static void ReturnToLane(IUnitEntity entity, Spotlight spotlight)
         {
-            // the nearest node of the loop (without its closing node), patrol resumes from there
-            spotlight.ReturnNode = NearestNode(spotlight.Loop, entity.Position);
+            // back to where it left its lane, then on towards the node it was heading to; without that, the nearest node
+            if (!spotlight.ResumePosition.HasValue)
+                spotlight.ReturnNode = NearestNode(spotlight.Loop, entity.Position);
             spotlight.State = SpotlightState.Return;
 
-            Vector3 node = spotlight.Loop[spotlight.ReturnNode];
+            Vector3 node = spotlight.ResumePosition ?? spotlight.Loop[spotlight.ReturnNode];
             if (Vector3.Distance(entity.Position, node) > 0.5f)
                 MoveTo(entity, node, SpotlightReturnSpeed);
         }

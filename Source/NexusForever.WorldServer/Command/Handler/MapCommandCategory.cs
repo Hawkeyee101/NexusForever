@@ -14,6 +14,7 @@ using NexusForever.WorldServer.Command.Context;
 using NexusForever.WorldServer.Command.Convert;
 
 using NexusForever.Network.World.Message.Model.Map;
+using NexusForever.Network.World.Message.Model.PublicEvent;
 
 namespace NexusForever.WorldServer.Command.Handler
 {
@@ -124,6 +125,25 @@ namespace NexusForever.WorldServer.Command.Handler
 
             publicEvent.SetObjectiveLocations(objectiveId, worldLocation2Id == 0u ? [] : [worldLocation2Id]);
             context.SendMessage($"Set location {worldLocation2Id} on objective {objectiveId} of public event {eventId}.");
+        }
+
+        [Command(Permission.MapUnload, "Dev: send a raw public event location update to yourself. Operation 0 add to event, 1 remove from event, 2 add to objective, 3 remove from objective.", "locationupdate")]
+        public void HandleMapLocationUpdate(ICommandContext context,
+            [Parameter("Public event id (operations 0/1) or objective id (operations 2/3).")]
+            uint objectId,
+            [Parameter("Operation: 0 AddToEvent, 1 RemoveFromEvent, 2 AddToObjective, 3 RemoveFromObjective.")]
+            uint operation,
+            [Parameter("WorldLocation2 id.")]
+            uint worldLocation2Id)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            player.Session.EnqueueMessageEncrypted(new ServerPublicEventLocationUpdate
+            {
+                ObjectId         = objectId,
+                Operation        = (PublicEventOperationType)operation,
+                WorldLocation2Id = worldLocation2Id
+            });
+            context.SendMessage($"Sent location update: {(PublicEventOperationType)operation} {objectId}, location {worldLocation2Id}.");
         }
 
         [Command(Permission.MapUnload, "Dev: show or hide a map hex group (MapZoneHexGroup) on your map, e.g. the Hycrest groups 10-20.", "hexgroup")]
