@@ -11,6 +11,7 @@ using NexusForever.Game.Static.Entity.Movement.Command.Mode;
 using NexusForever.Game.Static.Entity.Movement.Spline;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
+using NexusForever.GameTable.Model;
 using NexusForever.Script.Template.Filter;
 using NexusForever.Shared;
 
@@ -86,6 +87,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const float AlarmLineRange = 3f;
         private const float AlarmSpawnDistance = 20f;
         private const float PartyRange = 30f;
+
+        // dev: show the alarm line in game with ground light circles (the spotlight's light, display 23754, on the
+        // harmless Visual Fluff Spotlight creature) every few metres; set to false once the trigger is settled
+        private const bool ShowAlarmLine = true;
+        private const uint AlarmLineMarker = 28723u;
+        private const uint AlarmLineMarkerDisplay = 23754u;
+        private const float AlarmLineMarkerSpacing = 4f;
+
         private static readonly Vector3 PremaPosition = new(-2377.9238f, -929.3451f, -1641.9752f);
 
         private static readonly TimeSpan MissionEndDelay = TimeSpan.FromSeconds(4);
@@ -174,6 +183,39 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 .OrderBy(n => n.Ordinal)
                 .Select(n => new Vector2(n.Position0, n.Position2))
                 .ToList();
+
+            if (ShowAlarmLine)
+                ShowLine(alarmLine);
+        }
+
+        /// <summary>
+        /// Dev: mark <paramref name="line"/> on the ground; the markers are the mission's, removed when it ends.
+        /// </summary>
+        private void ShowLine(List<Vector2> line)
+        {
+            ICreatureInfo creatureInfo = creatureInfoManager.GetCreatureInfo(AlarmLineMarker);
+            Creature2DisplayInfoEntry display = gameTableManager.Creature2DisplayInfo.GetEntry(AlarmLineMarkerDisplay);
+            if (creatureInfo == null)
+                return;
+
+            for (int i = 0; i < line.Count - 1; i++)
+            {
+                float length = Vector2.Distance(line[i], line[i + 1]);
+                for (float d = 0f; d < length; d += AlarmLineMarkerSpacing)
+                    AddMarker(Vector2.Lerp(line[i], line[i + 1], d / length));
+            }
+            AddMarker(line[^1]);
+
+            void AddMarker(Vector2 point)
+            {
+                float y = mapInstance.GetTerrainHeight(point.X, point.Y) ?? -929f;
+
+                var marker = publicEvent.CreateEntity<INonPlayerEntity>();
+                marker.Initialise(creatureInfo);
+                if (display != null)
+                    marker.CreatureDisplayEntry = display;
+                marker.AddToMap(mapInstance, new Vector3(point.X, y, point.Y));
+            }
         }
 
         /// <summary>
