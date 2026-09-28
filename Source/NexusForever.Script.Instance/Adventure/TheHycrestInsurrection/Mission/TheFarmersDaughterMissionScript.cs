@@ -82,9 +82,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private static readonly TimeSpan SpotlightRetrackInterval = TimeSpan.FromSeconds(0.5);
 
         // the alarm: crossing this line calls a Recon Specialist this far from the party, towards Prema. Retail's trigger
-        // isn't in the tables; the specialist was measured at -2413, -1587, between Millithea and Prema. Spline 4588
-        // (60 m between Millithea and Prema, 4648 north of Millithea triggered too early)
-        private const uint AlarmSpline = 4588u;
+        // isn't in the tables; the specialist was measured at -2413, -1587, between Millithea and Prema. Measured in game
+        // (28 Sep 2026): 165 m north-south between Millithea and Prema (splines 4648 and 4588 were too early)
+        private static readonly List<Vector2> AlarmLine =
+        [
+            new(-2405.2197f, -1536.3839f),
+            new(-2406.7625f, -1700.9954f)
+        ];
         private const float AlarmLineRange = 3f;
         private const float AlarmSpawnDistance = 20f;
         private const float PartyRange = 30f;
@@ -179,11 +183,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             alarm = new HycrestAlarm(log, publicEvent, mapInstance, creatureInfoManager, spellParametersFactory,
                 globalQuestManager, dialogue);
-            alarmLine = gameTableManager.Spline2Node.Entries
-                .Where(n => n.SplineId == AlarmSpline)
-                .OrderBy(n => n.Ordinal)
-                .Select(n => new Vector2(n.Position0, n.Position2))
-                .ToList();
+            alarmLine = AlarmLine;
 
             if (ShowAlarmLine)
                 ShowLine(alarmLine);
@@ -310,8 +310,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         /// </summary>
         /// <remarks>
         /// One round per spline (OneShot) rather than a Cyclic spline: the server's Cyclic spline has no closing segment
-        /// (it jumped back to the start), and ending it on its start point left the client with a zero-length closing
-        /// segment (the scout stood still). LaunchSpline also sets the moving state and faces the entity where it walks.
+        /// (it jumped back to the start). MovementManager.SetPositionPath silently ignores a path whose first and last
+        /// nodes are the same (every patrol stood still), so a round that would end where it started ends just short of
+        /// it; the next round starts from there. LaunchSpline also sets the moving state and faces the entity where it
+        /// walks.
         /// </remarks>
         private void LaunchLoop(IWorldEntity entity, List<Vector3> loop, int start, float speed)
         {
@@ -320,6 +322,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             nodes.Add(nodes[0]);
             if (Vector3.Distance(entity.Position, nodes[0]) > 0.5f)
                 nodes.Insert(0, entity.Position);
+            else
+                nodes[0] = entity.Position;
+
+            if (Vector3.Distance(nodes[0], nodes[^1]) < RoundEndGap / 2f)
+                nodes[^1] = MoveTowards(nodes[^1], nodes[^2], RoundEndGap);
 
             float length = 0f;
             for (int i = 1; i < nodes.Count; i++)
@@ -360,6 +367,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
                 LaunchLoop(entity, walk.Loop, NearestNode(walk.Loop, entity.Position), walk.Speed);
             }
+        }
+
+        // a round ends this far short of its start point, see LaunchLoop
+        private const float RoundEndGap = 0.1f;
+
+        private static Vector3 MoveTowards(Vector3 from, Vector3 to, float distance)
+        {
+            Vector3 direction = to - from;
+            return direction.LengthSquared() > 0f ? from + Vector3.Normalize(direction) * distance : from;
         }
 
         private static int NearestNode(List<Vector3> loop, Vector3 position)

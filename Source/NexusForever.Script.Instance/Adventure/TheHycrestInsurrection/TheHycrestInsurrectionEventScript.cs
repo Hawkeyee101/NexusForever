@@ -5,14 +5,15 @@ using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Trigger;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.PublicEvent;
+using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
-using NexusForever.Network.World.Message.Model;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter;
+using NexusForever.Shared;
 
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
@@ -108,15 +109,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         };
         private readonly List<uint> barnDoors = [];
 
-        // time of day (retail video): the next scenario after the regroup scene of vote 46 is in the morning. The sky is
-        // held by a very long day; players entering later are sent it after the world server's own time (sent when they
-        // are added to the map)
-        private const uint MorningTimeOfDay = 7u * 3600u;
-        private const uint HeldDayLength = 30u * 24u * 3600u;
-        private static readonly TimeSpan TimeOfDayJoinDelay = TimeSpan.FromSeconds(1);
-        private uint? timeOfDay;
+        // time of day (retail video): the scenario after the regroup scene of vote 46 is in the morning. World 1149 has
+        // fixed sky files (night), the day cycle (ServerTimeOfDay) doesn't change it; the adventure switches skies with
+        // spells on the players: "Hycrest Adventure - Daytime Skybox" (27013, Quick 48796, Long 50044) and "Nighttime
+        // Skybox" (27236, 48797, 50045), a Fluff aura with the sky visual plus a force remove of the other skies.
+        // Players entering later get it after they are on the map.
+        private const uint MorningSkySpell = 50044u;
+        private static readonly TimeSpan SkyJoinDelay = TimeSpan.FromSeconds(1);
+        private uint? skySpell;
 
-        // a time of day change is due: the barn doors stay closed until it has been sent
+        // a sky change is due: the barn doors stay closed until it has been cast
         private bool timeOfDayPending;
 
         // barn doors (retail video): no door while the doorway is open; closing spawns the barn's door (its own phase of
@@ -143,16 +145,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly ILogger<TheHycrestInsurrectionEventScript> log;
         private readonly IGameTableManager gameTableManager;
         private readonly IStoryBuilder storyBuilder;
+        private readonly IFactory<ISpellParameters> spellParametersFactory;
         private readonly HycrestDialogue dialogue;
 
         public TheHycrestInsurrectionEventScript(
             ILogger<TheHycrestInsurrectionEventScript> log,
             IGameTableManager gameTableManager,
-            IStoryBuilder storyBuilder)
+            IStoryBuilder storyBuilder,
+            IFactory<ISpellParameters> spellParametersFactory)
         {
-            this.log              = log;
-            this.gameTableManager = gameTableManager;
-            this.storyBuilder     = storyBuilder;
+            this.log                    = log;
+            this.gameTableManager       = gameTableManager;
+            this.storyBuilder           = storyBuilder;
+            this.spellParametersFactory = spellParametersFactory;
             dialogue = new HycrestDialogue(gameTableManager, sceneQueue);
         }
 
@@ -224,13 +229,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                         UpdateRegroupParticipants();
                     }
 
-                    if (timeOfDay.HasValue)
+                    if (skySpell.HasValue)
                     {
                         uint guid = player.Guid;
-                        sceneQueue.Enqueue(TimeOfDayJoinDelay, () =>
+                        sceneQueue.Enqueue(SkyJoinDelay, () =>
                         {
-                            if (mapInstance.GetEntity<IPlayer>(guid) is IPlayer joined && timeOfDay.HasValue)
-                                SendTimeOfDay(joined, timeOfDay.Value);
+                            if (mapInstance.GetEntity<IPlayer>(guid) is IPlayer joined && skySpell.HasValue)
+                                CastSky(joined, skySpell.Value);
                         });
                     }
                     break;
@@ -413,7 +418,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             if (voteId == 46u)
             {
                 timeOfDayPending = true;
-                SetTimeOfDay(MorningTimeOfDay);
+                SetSky(MorningSkySpell);
             }
 
             // outcome line from the track's spokesperson, the mission's story communicator, then the mission
@@ -524,22 +529,21 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             regroup.InvokeScriptCollection<IHycrestRegroupScript>(s => s.StartRegroup(objectiveId, (uint)mapInstance.PlayerCount));
         }
 
-        private void SetTimeOfDay(uint secondsSinceMidnight)
+        private void SetSky(uint spell4Id)
         {
-            timeOfDay = secondsSinceMidnight;
+            skySpell = spell4Id;
             foreach (IPlayer player in mapInstance.GetPlayers())
-                SendTimeOfDay(player, secondsSinceMidnight);
+                CastSky(player, spell4Id);
             timeOfDayPending = false;
-            log.LogInformation($"Hycrest: time of day set to {TimeSpan.FromSeconds(secondsSinceMidnight):hh\\:mm}.");
+            log.LogInformation($"Hycrest: sky spell {spell4Id} cast on the players.");
         }
 
-        private static void SendTimeOfDay(IPlayer player, uint secondsSinceMidnight)
+        private void CastSky(IPlayer player, uint spell4Id)
         {
-            player.Session.EnqueueMessageEncrypted(new ServerTimeOfDay
-            {
-                TimeOfDay   = secondsSinceMidnight,
-                LengthOfDay = HeldDayLength
-            });
+            ISpellParameters parameters = spellParametersFactory.Resolve();
+            parameters.PrimaryTargetId        = player.Guid;
+            parameters.UserInitiatedSpellCast = false;
+            player.CastSpell(spell4Id, parameters);
         }
 
         /// <summary>
