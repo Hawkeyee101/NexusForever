@@ -2,7 +2,9 @@ using System.Numerics;
 using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Entity.Creature;
 using NexusForever.Game.Abstract.PublicEvent;
+using NexusForever.Game.Abstract.Quest;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Entity.Movement.Command.Mode;
@@ -76,6 +78,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private static readonly TimeSpan SpotlightPulseInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan SpotlightCooldown = TimeSpan.FromSeconds(5.5);
 
+        // the alarm: crossing this line (spline 4648, 77 m across the field north of Millithea) calls a Recon Specialist
+        // this far from the party, towards Prema. Retail's trigger isn't in the tables; the specialist was measured at
+        // -2413, -1587, between Millithea and Prema
+        private const uint AlarmSpline = 4648u;
+        private const float AlarmLineRange = 3f;
+        private const float AlarmSpawnDistance = 20f;
+        private const float PartyRange = 30f;
+        private static readonly Vector3 PremaPosition = new(-2377.9238f, -929.3451f, -1641.9752f);
+
         private static readonly TimeSpan MissionEndDelay = TimeSpan.FromSeconds(4);
 
         // patrolling scouts: spawn position (first node) and the route they walk back and forth
@@ -107,26 +118,38 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private bool premaCalled;
         private bool premaFree;
         private bool premaThanked;
+        private bool rescueStarted;
         private bool ending;
 
         private readonly TimedActionQueue actionQueue = new();
+
+        private HycrestAlarm alarm;
+        private List<Vector2> alarmLine;
 
         #region Dependency Injection
 
         private readonly ILogger<TheFarmersDaughterMissionScript> log;
         private readonly IStoryBuilder storyBuilder;
         private readonly IFactory<ISpellParameters> spellParametersFactory;
+        private readonly IGameTableManager gameTableManager;
+        private readonly ICreatureInfoManager creatureInfoManager;
+        private readonly IGlobalQuestManager globalQuestManager;
         private readonly HycrestDialogue dialogue;
 
         public TheFarmersDaughterMissionScript(
             ILogger<TheFarmersDaughterMissionScript> log,
             IGameTableManager gameTableManager,
             IStoryBuilder storyBuilder,
-            IFactory<ISpellParameters> spellParametersFactory)
+            IFactory<ISpellParameters> spellParametersFactory,
+            ICreatureInfoManager creatureInfoManager,
+            IGlobalQuestManager globalQuestManager)
         {
             this.log                    = log;
             this.storyBuilder           = storyBuilder;
             this.spellParametersFactory = spellParametersFactory;
+            this.gameTableManager       = gameTableManager;
+            this.creatureInfoManager    = creatureInfoManager;
+            this.globalQuestManager     = globalQuestManager;
             dialogue = new HycrestDialogue(gameTableManager, actionQueue);
         }
 
@@ -143,6 +166,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             publicEvent.SetObjectiveMapRegions(SpeakWithTarquim, (TarquimSocket, TarquimLocation));
             publicEvent.SetObjectiveLocations(RescueCaptives, MillitheaLocation);
             publicEvent.SetObjectiveMapRegions(RescueCaptives, (MillitheaSocket, MillitheaLocation));
+
+            alarm = new HycrestAlarm(log, publicEvent, mapInstance, creatureInfoManager, spellParametersFactory,
+                globalQuestManager, dialogue);
+            alarmLine = gameTableManager.Spline2Node.Entries
+                .Where(n => n.SplineId == AlarmSpline)
+                .OrderBy(n => n.Ordinal)
+                .Select(n => new Vector2(n.Position0, n.Position2))
+                .ToList();
         }
 
         /// <summary>
@@ -215,6 +246,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             UpdateMillithea();
             UpdatePrema();
             UpdateSpotlights(lastTick);
+            UpdateAlarm(lastTick);
         }
 
         private void UpdateMillithea()
@@ -257,6 +289,47 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             prema.InteractionBlocked = false;
             dialogue.Say(prema, PremaEeep, false);
             log.LogInformation("Hycrest: the Responsebot is down, Prema can be freed.");
+        }
+
+        private void UpdateAlarm(double lastTick)
+        {
+            alarm.Update(lastTick);
+            // armed once Tarquim has asked for help
+            if (alarm.IsTriggered || !rescueStarted || ending)
+                return;
+
+            IPlayer crossing = mapInstance.GetPlayers()
+                .FirstOrDefault(p => p.IsAlive && DistanceToLine(new Vector2(p.Position.X, p.Position.Z)) <= AlarmLineRange);
+            if (crossing == null)
+                return;
+
+            // from the middle of the party, towards Prema
+            List<IPlayer> party = mapInstance.GetPlayers()
+                .Where(p => p.IsAlive && Vector3.Distance(p.Position, crossing.Position) <= PartyRange)
+                .ToList();
+            Vector3 centre = party.Aggregate(Vector3.Zero, (sum, p) => sum + p.Position) / party.Count;
+
+            Vector3 direction = PremaPosition - centre;
+            direction.Y = 0f;
+            Vector3 position = direction.LengthSquared() > 0.01f
+                ? centre + Vector3.Normalize(direction) * AlarmSpawnDistance
+                : centre;
+
+            alarm.Trigger(position, crossing);
+        }
+
+        private float DistanceToLine(Vector2 point)
+        {
+            float distance = float.MaxValue;
+            for (int i = 0; i < alarmLine.Count - 1; i++)
+            {
+                Vector2 a = alarmLine[i];
+                Vector2 ab = alarmLine[i + 1] - a;
+                float t = ab.LengthSquared() > 0f ? Math.Clamp(Vector2.Dot(point - a, ab) / ab.LengthSquared(), 0f, 1f) : 0f;
+                distance = MathF.Min(distance, Vector2.Distance(point, a + ab * t));
+            }
+
+            return distance;
         }
 
         private class Spotlight
@@ -347,6 +420,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 storyBuilder.SendStoryCommunicator(AyitaHurry, AyitaSinnatus, player);
 
             publicEvent.ActivateObjective(RescueCaptives);
+            rescueStarted = true;
         }
 
         private void OnCaptivesRescued()
