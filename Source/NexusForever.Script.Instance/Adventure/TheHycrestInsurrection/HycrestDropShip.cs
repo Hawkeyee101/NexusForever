@@ -232,8 +232,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             AttachToShip(ship, RightDoorGuid, HycrestShipLayout.DoorPoint, HycrestShipLayout.Yaw);
             AttachToShip(ship, LeftDoorGuid, HycrestShipLayout.DoorPoint, HycrestShipLayout.Yaw);
             AttachToShip(ship, HologramGuid, HycrestShipLayout.HologramSpot, HycrestShipLayout.HologramYaw);
-            foreach (uint guid in GlowCopyGuids)
-                AttachGlowCopy(ship, guid);
 
             foreach (IPlayer player in map.GetPlayers())
                 if (players.TryGetValue(player.CharacterId, out PlayerDrop drop) && drop.Boarded && drop.State == DropState.OnBoard)
@@ -257,47 +255,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             actionQueue.Enqueue(TimeSpan.FromMilliseconds(flyMs + turnMs + 500u), () => Arrived = true);
 
             log.LogInformation($"Hycrest: drop ship flying in ({distance:0} m), then turning.");
-        }
-
-        /// <summary>
-        /// Unit copies of the ship and its doors for the green sync glow (see the intro script); they ride on the ship.
-        /// </summary>
-        public List<uint> GlowCopyGuids { get; } = [];
-
-        /// <summary>
-        /// Register a glow copy; if the ship is already flying it is put on the ship at once.
-        /// </summary>
-        public void AddGlowCopy(IWorldEntity copy)
-        {
-            GlowCopyGuids.Add(copy.Guid);
-
-            IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
-            if (FlewIn && ship != null)
-                AttachGlowCopy(ship, copy.Guid);
-        }
-
-        private void AttachGlowCopy(IWorldEntity ship, uint guid)
-        {
-            // the ship's copy sits exactly on the ship (local zero), the doors' copies on the doors
-            bool isShip = map.GetEntity<IWorldEntity>(guid)?.CreatureId == ship.CreatureId;
-            AttachToShip(ship, guid, isShip ? HycrestShipLayout.Origin : HycrestShipLayout.DoorPoint, HycrestShipLayout.Yaw);
-        }
-
-        /// <summary>
-        /// Move the door entities out of sight (100 m below their spot in the ship's frame) or back.
-        /// </summary>
-        /// <remarks>
-        /// During the glow: a copy exactly on a model doesn't show over it, so the real doors make way for their copies.
-        /// </remarks>
-        public void HideDoors(bool hidden)
-        {
-            IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
-            if (ship == null)
-                return;
-
-            Vector3 doorPoint = HycrestShipLayout.DoorPoint - (hidden ? new Vector3(0f, 100f, 0f) : Vector3.Zero);
-            AttachToShip(ship, RightDoorGuid, doorPoint, HycrestShipLayout.Yaw);
-            AttachToShip(ship, LeftDoorGuid, doorPoint, HycrestShipLayout.Yaw);
         }
 
         private void AttachToShip(IWorldEntity ship, uint guid, Vector3 hoverPosition, float hoverYaw)

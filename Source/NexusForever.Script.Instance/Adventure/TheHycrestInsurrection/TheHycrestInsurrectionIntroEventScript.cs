@@ -84,12 +84,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint SyncSpell = 62968u;
         private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
-        // the ship's glow: unit copies of the ship and doors (only units cast spells) spawned in this phase under the black
-        // screen, riding on the ship; they cast the sync spell with the players and are removed after it. The ship starts
-        // flying under the black too (FlyInDelay, after the start fade has gone fully black at ~1.5 s)
-        private const uint ShipGlowPhase = 2u;
-        private static readonly TimeSpan ShipGlowSpawnDelay = TimeSpan.FromSeconds(1.5);
-        private static readonly TimeSpan FlyInDelay         = TimeSpan.FromSeconds(2);
+        // the ship starts flying under the black screen, after the start fade has gone fully black (~1.5 s). The green
+        // glow is on the players only; retail's glow on the ship/screen isn't reproduced (see HYCREST.md)
+        private static readonly TimeSpan FlyInDelay = TimeSpan.FromSeconds(2);
 
         // the hologram talks (talk emote, Default_Talk ~4 s) while each narration message shows
         private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4)];
@@ -189,13 +186,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             {
                 case PublicEventCreature.IntroSetShip:
                     dropShip.ShipGuid = worldEntity.Guid;
-                    break;
-                case PublicEventCreature.DominionDropship when worldEntity is IUnitEntity glowCopy:
-                    // the unit copies of the ship and its doors (phase ShipGlowPhase): glow green with the sync spell, then go
-                    ShipGlow(glowCopy, StandState.State1);
-                    break;
-                case PublicEventCreature.DropshipDoorRight or PublicEventCreature.DropshipDoorLeft when worldEntity is IUnitEntity glowCopy:
-                    ShipGlow(glowCopy, StandState.State0);
                     break;
                 case PublicEventCreature.DominionDropship:
                     // hovering at its start point, engines running; players enter on its deck and it flies forward to the
@@ -308,13 +298,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             if (!flyInQueued)
             {
-                // under the black screen: the glow copies spawn, then the ship starts flying (attaching the players to it
-                // gives a small jump, hidden by the black); as the black ends the ship and doors glow with the players
+                // the ship starts flying under the black screen: attaching the players to it gives a small jump, hidden by
+                // the black
                 flyInQueued = true;
-                actionQueue.Enqueue(ShipGlowSpawnDelay, () => publicEvent.SetPhase(ShipGlowPhase));
                 actionQueue.Enqueue(FlyInDelay, dropShip.FlyIn);
-                actionQueue.Enqueue(SyncDelay, StartShipGlow);
-                actionQueue.Enqueue(SyncDelay + SyncDuration, EndShipGlow);
             }
 
             if (dawsonAppearQueued)
@@ -322,39 +309,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             dawsonAppearQueued = true;
             actionQueue.Enqueue(DawsonAppearDelay, ShowDawson);
-        }
-
-        private void ShipGlow(IUnitEntity glowCopy, StandState state)
-        {
-            // same state as the entity it covers (ship hovering, doors closed); it rides on the ship like the doors
-            HycrestDropShip.SetState(glowCopy, state);
-            dropShip.AddGlowCopy(glowCopy);
-        }
-
-        private void StartShipGlow()
-        {
-            // the real doors are moved out of sight during the glow: a copy exactly on a model doesn't show over it
-            dropShip.HideDoors(true);
-
-            foreach (uint guid in dropShip.GlowCopyGuids)
-            {
-                if (mapInstance.GetEntity<IWorldEntity>(guid) is not IUnitEntity copy)
-                    continue;
-
-                ISpellParameters parameters = spellParametersFactory.Resolve();
-                parameters.PrimaryTargetId        = copy.Guid;
-                parameters.UserInitiatedSpellCast = false;
-                copy.CastSpell(SyncSpell, parameters);
-            }
-        }
-
-        private void EndShipGlow()
-        {
-            foreach (uint guid in dropShip.GlowCopyGuids)
-                mapInstance.GetEntity<IWorldEntity>(guid)?.RemoveFromMap();
-            dropShip.GlowCopyGuids.Clear();
-
-            dropShip.HideDoors(false);
         }
 
         /// <summary>

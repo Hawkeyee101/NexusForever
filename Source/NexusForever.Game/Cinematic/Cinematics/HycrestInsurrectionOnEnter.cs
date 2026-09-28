@@ -2,7 +2,6 @@ using System.Numerics;
 using NexusForever.Game.Abstract.Cinematic;
 using NexusForever.Game.Abstract.Cinematic.Cinematics;
 using NexusForever.Game.Abstract.Entity;
-using NexusForever.Game.Abstract.Map.Search;
 using NexusForever.Network.World.Entity;
 
 namespace NexusForever.Game.Cinematic.Cinematics
@@ -35,12 +34,6 @@ namespace NexusForever.Game.Cinematic.Cinematics
         private const float SetAngle = 0f;
 
         private const uint CinematicTimeline = 45237u; // plays Cinematic_Misc_00 (the whole timeline) on an actor
-
-        // retail: as everyone appears, the whole ship glows green (synchronisation); the players get the spell outside the
-        // cinematic, the ship (a platform, it can't be a spell target here) gets the green hologram overlay of spell 62968
-        private const uint ShipCreature             = 17722u;
-        private const uint SyncHologramVisualEffect = 20846u;
-        private const uint SyncDuration             = 3000u;
 
         // retail: a black screen with the narration typed in. The camera's fade goes to black at once, holds under the
         // narration and fades the view in as it ends. The green synchronisation glow follows outside the cinematic, like
@@ -76,17 +69,6 @@ namespace NexusForever.Game.Cinematic.Cinematics
             ICamera view = new Camera(camera, 7, 0, true, FadeTransition, 0, BlackHold, BlackFadeIn);
             AddCamera(view);
 
-            IWorldEntity ship = Player.Map?
-                .Search(Player.Position, 300f, new CreatureSearchCheck(ShipCreature))
-                .FirstOrDefault();
-            if (ship != null)
-            {
-                Keyframes.Add("ShipSynchronisation",
-                [
-                    new VisualEffect(SyncHologramVisualEffect, ship.Guid, initialDelay: FadeInAt, duration: SyncDuration)
-                ]);
-            }
-
             // the Caretaker's arrival voice, sound only (visual 34515 plays Play_AdventureVO_General_Caretaker_Intro_02,
             // "Do not think that you are impervious to harm, simply because this is a simulation.")
             Keyframes.Add("CaretakerIntro",
@@ -96,21 +78,6 @@ namespace NexusForever.Game.Cinematic.Cinematics
 
             // no subtitles: the intro event script sends the Caretaker's narration after the black screen, as story
             // communicators (a cinematic hides story windows)
-        }
-
-        private class CreatureSearchCheck : ISearchCheck<IWorldEntity>
-        {
-            private readonly uint creatureId;
-
-            public CreatureSearchCheck(uint creatureId)
-            {
-                this.creatureId = creatureId;
-            }
-
-            public bool CheckEntity(IWorldEntity entity)
-            {
-                return entity.CreatureId == creatureId;
-            }
         }
     }
 }
