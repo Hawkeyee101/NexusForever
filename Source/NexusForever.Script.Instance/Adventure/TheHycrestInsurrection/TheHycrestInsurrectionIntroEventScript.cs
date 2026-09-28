@@ -55,7 +55,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // screen (the arrival cinematic, 20 s); then the green "synchronisation" glow on the players and the ship, the ship
         // flies to its hover point with everyone on board, the Caretaker's lines as portrait pop-ups (10 s each) while the
         // hologram talks, then Dawson comes out of the door where the hologram was (once the ship has arrived)
-        private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(4); // HycrestInsurrectionOnEnter.BlackDuration
+        private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(3); // HycrestInsurrectionOnEnter.BlackDuration
         private static readonly TimeSpan SyncDelay          = BlackScreen;
         private static readonly TimeSpan DawsonArrivalWait  = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan Message1Delay      = BlackScreen + TimeSpan.FromSeconds(1.5);
@@ -84,10 +84,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint SyncSpell = 62968u;
         private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
 
-        // the ship's glow: a unit copy of the ship (only units cast spells) spawned in this phase, ShipGlowLead before the
-        // players' sync so it is in place, then it casts the sync spell and is removed after it
+        // the ship's glow: unit copies of the ship and doors (only units cast spells) spawned in this phase under the black
+        // screen, riding on the ship; they cast the sync spell with the players and are removed after it. The ship starts
+        // flying under the black too (FlyInDelay, after the start fade has gone fully black at ~1.5 s)
         private const uint ShipGlowPhase = 2u;
-        private static readonly TimeSpan ShipGlowLead = TimeSpan.FromSeconds(0.5);
+        private static readonly TimeSpan ShipGlowSpawnDelay = TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan FlyInDelay         = TimeSpan.FromSeconds(2);
 
         // the hologram talks (talk emote, Default_Talk ~4 s) while each narration message shows
         private static readonly TimeSpan[] HologramTalkTimes = [TimeSpan.Zero, TimeSpan.FromSeconds(4)];
@@ -306,10 +308,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             if (!flyInQueued)
             {
-                // the ship glows with the players (its unit copy spawns just before), then flies
+                // under the black screen: the glow copies spawn, then the ship starts flying (attaching the players to it
+                // gives a small jump, hidden by the black); as the black ends the ship and doors glow with the players
                 flyInQueued = true;
-                actionQueue.Enqueue(SyncDelay - ShipGlowLead, () => publicEvent.SetPhase(ShipGlowPhase));
-                actionQueue.Enqueue(SyncDelay + SyncDuration, dropShip.FlyIn);
+                actionQueue.Enqueue(ShipGlowSpawnDelay, () => publicEvent.SetPhase(ShipGlowPhase));
+                actionQueue.Enqueue(FlyInDelay, dropShip.FlyIn);
+                actionQueue.Enqueue(SyncDelay, StartShipGlow);
+                actionQueue.Enqueue(SyncDelay + SyncDuration, EndShipGlow);
             }
 
             if (dawsonAppearQueued)
@@ -321,22 +326,35 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void ShipGlow(IUnitEntity glowCopy, StandState state)
         {
-            // same state as the entity it covers (ship hovering, doors closed)
+            // same state as the entity it covers (ship hovering, doors closed); it rides on the ship like the doors
             HycrestDropShip.SetState(glowCopy, state);
+            dropShip.AddGlowCopy(glowCopy);
+        }
 
-            uint guid = glowCopy.Guid;
-            actionQueue.Enqueue(ShipGlowLead, () =>
+        private void StartShipGlow()
+        {
+            // the real doors are moved out of sight during the glow: a copy exactly on a model doesn't show over it
+            dropShip.HideDoors(true);
+
+            foreach (uint guid in dropShip.GlowCopyGuids)
             {
-                IUnitEntity copy = mapInstance.GetEntity<IUnitEntity>(guid);
-                if (copy == null)
-                    return;
+                if (mapInstance.GetEntity<IWorldEntity>(guid) is not IUnitEntity copy)
+                    continue;
 
                 ISpellParameters parameters = spellParametersFactory.Resolve();
                 parameters.PrimaryTargetId        = copy.Guid;
                 parameters.UserInitiatedSpellCast = false;
                 copy.CastSpell(SyncSpell, parameters);
-            });
-            actionQueue.Enqueue(ShipGlowLead + SyncDuration, () => mapInstance.GetEntity<IWorldEntity>(guid)?.RemoveFromMap());
+            }
+        }
+
+        private void EndShipGlow()
+        {
+            foreach (uint guid in dropShip.GlowCopyGuids)
+                mapInstance.GetEntity<IWorldEntity>(guid)?.RemoveFromMap();
+            dropShip.GlowCopyGuids.Clear();
+
+            dropShip.HideDoors(false);
         }
 
         /// <summary>

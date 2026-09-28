@@ -48,7 +48,7 @@ namespace NexusForever.Game.Cinematic.Cinematics
         // held until just before the cinematic ends: a fade-in showed the camera's view (under the map) for a moment.
         // Short: players enter the map standing on the ship, the black only covers everything settling into place (the
         // narration now follows as portrait pop-ups)
-        private const uint   BlackDuration  = 4000u;
+        private const uint   BlackDuration  = 3000u;
         private const uint   FadeInAt       = BlackDuration - 200u;
         private const ushort BlackHold      = (ushort)FadeInAt;
         private const ushort BlackFadeIn    = 200;
