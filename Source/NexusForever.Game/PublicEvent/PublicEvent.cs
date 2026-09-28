@@ -600,6 +600,8 @@ namespace NexusForever.Game.PublicEvent
         {
             foreach (IPublicEventObjective objective in GetAllObjectives())
                 objective.OnTargetRemoved(unit.Guid, true);
+
+            InvokeScriptCollection<IPublicEventScript>(s => s.OnEntityKilled(unit));
         }
 
         public T CreateEntity<T>() where T : IGridEntity

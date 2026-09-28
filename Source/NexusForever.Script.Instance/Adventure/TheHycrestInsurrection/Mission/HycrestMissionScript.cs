@@ -48,6 +48,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         }
 
         /// <summary>
+        /// Invoked when a unit on the map has been killed; filter with <see cref="IsOwnEntity"/>.
+        /// </summary>
+        public virtual void OnEntityKilled(IUnitEntity unit)
+        {
+        }
+
+        /// <summary>
         /// Invoked when the mission enters a phase.
         /// </summary>
         public virtual void OnPublicEventPhase(uint phase)

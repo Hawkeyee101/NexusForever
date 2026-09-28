@@ -23,6 +23,13 @@ namespace NexusForever.Script.Template
         }
 
         /// <summary>
+        /// Invoked when a unit on the map the public event is on has been killed.
+        /// </summary>
+        void OnEntityKilled(IUnitEntity unit)
+        {
+        }
+
+        /// <summary>
         /// Invoked when the public event phase changes.
         /// </summary>
         void OnPublicEventPhase(uint phase)

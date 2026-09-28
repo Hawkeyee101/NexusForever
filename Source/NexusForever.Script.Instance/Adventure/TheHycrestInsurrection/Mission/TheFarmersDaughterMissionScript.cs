@@ -57,12 +57,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         /// two spots per run, everything else is shared. Each layout has its own phases (SQL) and map markers (the table
         /// points next to them: Millithea 39383/39384 are consecutive ids at her two spots, retail's own points).
         /// </summary>
-        private record Layout(string Name, uint MillitheaPhase, uint PremaPhase, uint MillitheaLocation, uint PremaLocation, Vector3 PremaPosition);
+        private record Layout(string Name, uint MillitheaPhase, uint PremaPhase, uint MillitheaLocation, uint PremaLocation);
 
         private static readonly Layout[] Layouts =
         [
-            new("A", 10u, 20u, 39383u, 40050u, new Vector3(-2377.9238f, -929.3451f, -1641.9752f)),
-            new("B", 11u, 21u, 39384u, 38652u, new Vector3(-2273.572f, -925.9564f, -1674.7275f))
+            new("A", 10u, 20u, 39383u, 40050u),
+            new("B", 11u, 21u, 39384u, 38652u)
         ];
 
         private Layout layout;
@@ -95,25 +95,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const float SpotlightReturnSpeed = 4f;
         private static readonly TimeSpan SpotlightRetrackInterval = TimeSpan.FromSeconds(0.5);
 
-        // the alarm: crossing this line calls a Recon Specialist this far from the party, towards Prema. Retail's trigger
-        // isn't in the tables; the specialist was measured at -2413, -1587, between Millithea and Prema. Measured in game
-        // (28 Sep 2026): 165 m north-south between Millithea and Prema (splines 4648 and 4588 were too early)
-        private static readonly List<Vector2> AlarmLine =
-        [
-            new(-2405.2197f, -1536.3839f),
-            new(-2406.7625f, -1700.9954f)
-        ];
-        private const float AlarmLineRange = 3f;
+        // the alarm (retail videos): every 5th kill of the mission's Dominion units summons a Recon Specialist, who calls
+        // the Rapid Response Team; he appears this far from the fallen unit, on the side away from the nearest player
+        private const int AlarmKills = 5;
         private const float AlarmSpawnDistance = 20f;
-        private const float PartyRange = 30f;
-
-        // dev: show the alarm line in game with ground light circles (the spotlight's light, display 23754, on the
-        // harmless Visual Fluff Spotlight creature) every few metres; set to false once the trigger is settled
-        private const bool ShowAlarmLine = false;
-        private const uint AlarmLineMarker = 28723u;
-        private const uint AlarmLineMarkerDisplay = 23754u;
-        private const float AlarmLineMarkerSpacing = 4f;
-
 
         private static readonly TimeSpan MissionEndDelay = TimeSpan.FromSeconds(4);
 
@@ -156,13 +141,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private bool premaCalled;
         private bool premaFree;
         private bool premaThanked;
-        private bool rescueStarted;
         private bool ending;
 
         private readonly TimedActionQueue actionQueue = new();
 
         private HycrestAlarm alarm;
-        private List<Vector2> alarmLine;
+        private int kills;
 
         #region Dependency Injection
 
@@ -213,40 +197,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             alarm = new HycrestAlarm(log, publicEvent, mapInstance, creatureInfoManager, spellParametersFactory,
                 globalQuestManager, dialogue);
-            alarmLine = AlarmLine;
-
-            if (ShowAlarmLine)
-                ShowLine(alarmLine);
-        }
-
-        /// <summary>
-        /// Dev: mark <paramref name="line"/> on the ground; the markers are the mission's, removed when it ends.
-        /// </summary>
-        private void ShowLine(List<Vector2> line)
-        {
-            ICreatureInfo creatureInfo = creatureInfoManager.GetCreatureInfo(AlarmLineMarker);
-            Creature2DisplayInfoEntry display = gameTableManager.Creature2DisplayInfo.GetEntry(AlarmLineMarkerDisplay);
-            if (creatureInfo == null)
-                return;
-
-            for (int i = 0; i < line.Count - 1; i++)
-            {
-                float length = Vector2.Distance(line[i], line[i + 1]);
-                for (float d = 0f; d < length; d += AlarmLineMarkerSpacing)
-                    AddMarker(Vector2.Lerp(line[i], line[i + 1], d / length));
-            }
-            AddMarker(line[^1]);
-
-            void AddMarker(Vector2 point)
-            {
-                float y = mapInstance.GetTerrainHeight(point.X, point.Y) ?? -929f;
-
-                var marker = publicEvent.CreateEntity<INonPlayerEntity>();
-                marker.Initialise(creatureInfo);
-                if (display != null)
-                    marker.CreatureDisplayEntry = display;
-                marker.AddToMap(mapInstance, new Vector3(point.X, y, point.Y));
-            }
         }
 
         /// <summary>
@@ -518,33 +468,39 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private void UpdateAlarm(double lastTick)
         {
             alarm.Update(lastTick);
-            // armed once Tarquim has asked for help
-            if (alarm.IsTriggered || !rescueStarted || ending)
-                return;
-
-            IPlayer crossing = mapInstance.GetPlayers()
-                .FirstOrDefault(p => p.IsAlive && DistanceToLine(new Vector2(p.Position.X, p.Position.Z)) <= AlarmLineRange);
-            if (crossing == null)
-                return;
-
-            // from the middle of the party, towards Prema
-            List<IPlayer> party = mapInstance.GetPlayers()
-                .Where(p => p.IsAlive && Vector3.Distance(p.Position, crossing.Position) <= PartyRange)
-                .ToList();
-            Vector3 centre = party.Aggregate(Vector3.Zero, (sum, p) => sum + p.Position) / party.Count;
-
-            Vector3 direction = layout.PremaPosition - centre;
-            direction.Y = 0f;
-            Vector3 position = direction.LengthSquared() > 0.01f
-                ? centre + Vector3.Normalize(direction) * AlarmSpawnDistance
-                : centre;
-
-            alarm.Trigger(position, crossing);
         }
 
-        private float DistanceToLine(Vector2 point)
+        /// <summary>
+        /// Invoked when a unit on the map has been killed: every 5th of the mission's Dominion units sets off the alarm.
+        /// </summary>
+        public override void OnEntityKilled(IUnitEntity unit)
         {
-            return DistanceToPolyline(alarmLine, point);
+            if (ending || publicEvent.HasFinished || !IsOwnEntity(unit) || unit is IPlayer)
+                return;
+
+            // the alarm's own units and the spotlights don't count; neither do friendly units
+            if (HycrestAlarm.IsAlarmUnit(unit.CreatureId) || unit.CreatureId == SpotlightTarget || (uint)unit.Faction1 != HostileFaction)
+                return;
+
+            kills++;
+            if (kills % AlarmKills != 0 || alarm.IsActive)
+                return;
+
+            IPlayer target = mapInstance.GetPlayers()
+                .Where(p => p.IsAlive)
+                .OrderBy(p => Vector3.Distance(p.Position, unit.Position))
+                .FirstOrDefault();
+            if (target == null)
+                return;
+
+            Vector3 away = unit.Position - target.Position;
+            away.Y = 0f;
+            Vector3 position = away.LengthSquared() > 0.01f
+                ? unit.Position + Vector3.Normalize(away) * AlarmSpawnDistance
+                : unit.Position + new Vector3(AlarmSpawnDistance, 0f, 0f);
+
+            log.LogInformation($"Hycrest: {kills} kills, alarm.");
+            alarm.Trigger(position, target);
         }
 
         private static float DistanceToPolyline(List<Vector2> line, Vector2 point)
@@ -809,7 +765,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 storyBuilder.SendStoryCommunicator(AyitaHurry, AyitaSinnatus, player);
 
             publicEvent.ActivateObjective(RescueCaptives);
-            rescueStarted = true;
         }
 
         private void OnCaptivesRescued()

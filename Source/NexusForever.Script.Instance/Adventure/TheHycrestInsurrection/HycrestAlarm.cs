@@ -59,7 +59,18 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             Done
         }
 
-        public bool IsTriggered => state != AlarmState.Idle;
+        /// <summary>
+        /// The alarm is running: the specialist is calling, the flare is up or the team is arriving.
+        /// </summary>
+        public bool IsActive => state is AlarmState.Calling or AlarmState.Flare or AlarmState.Arriving;
+
+        /// <summary>
+        /// Return true if the creature is one the alarm spawns (they don't count as kills for the next alarm).
+        /// </summary>
+        public static bool IsAlarmUnit(uint creatureId)
+        {
+            return creatureId is ReconSpecialist or AssistanceFlare or ChuaGroundDrill or RapidResponseCommando or RapidResponseDrone;
+        }
 
         private AlarmState state;
         // references, spawned entities only get a guid once they are on the map
@@ -103,8 +114,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public void Trigger(Vector3 position, IPlayer target)
         {
-            if (state != AlarmState.Idle)
+            // it can go off again once the previous alarm is over
+            if (IsActive)
                 return;
+
+            flare = null;
 
             specialist = Spawn(ReconSpecialist, position, target.Position);
             if (specialist == null)
