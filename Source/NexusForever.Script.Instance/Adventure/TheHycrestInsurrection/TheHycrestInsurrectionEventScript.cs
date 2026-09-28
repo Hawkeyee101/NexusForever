@@ -10,7 +10,6 @@ using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
-using NexusForever.Network.World.Message.Model;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter;
 
@@ -108,11 +107,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         };
         private readonly List<uint> barnDoors = [];
 
-        // barn doors: the state each should show, and which players have been sent it (a door's stand state in its
-        // create message didn't show, it spawned closed; the emote after it arrived does)
-        private readonly Dictionary<uint, StandState> barnDoorStates = [];
-        private readonly HashSet<(uint Door, uint Player)> barnDoorsShown = [];
-        private static readonly TimeSpan BarnDoorShowDelay = TimeSpan.FromSeconds(0.5);
+        // barn doors (retail video): no door while the doorway is open; closing spawns the barn's door (its own phase of
+        // the main event), opening removes it, no animation
+        private static readonly Dictionary<uint, uint> BarnDoorPhases = new()
+        {
+            [HycrestMissions.RegroupAbandonedBarn] = 20u,
+            [HycrestMissions.RegroupSinnatusBarn]  = 21u
+        };
 
         // the doors open once the mission after a vote has everything on the map (any layout): all its spawns added
         private IPublicEvent openDoorsFor;
@@ -121,8 +122,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private uint regroupObjective;
         private uint hideoutPhase;
 
-        // a barn door belongs to the hideout whose regroup point is this close
-        private const float BarnDoorRange = 40f;
         private bool barnArrivalPlayed;
         private double sceneClock;
         private double barnArrivalLineEnd;
@@ -178,33 +177,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void UpdateBarnDoors(double lastTick)
         {
-            // show each door's state to players who can newly see it, a moment after it reached their client
-            foreach (IPlayer player in mapInstance.GetPlayers())
-            {
-                foreach (uint guid in barnDoors)
-                {
-                    if (barnDoorsShown.Contains((guid, player.Guid)) || player.GetVisible<IWorldEntity>(guid) == null)
-                        continue;
-
-                    barnDoorsShown.Add((guid, player.Guid));
-                    uint playerGuid = player.Guid;
-                    sceneQueue.Enqueue(BarnDoorShowDelay, () =>
-                    {
-                        if (mapInstance.GetEntity<IPlayer>(playerGuid) is not IPlayer viewer || !barnDoorStates.TryGetValue(guid, out StandState state))
-                            return;
-
-                        viewer.Session.EnqueueMessageEncrypted(new ServerEmote
-                        {
-                            Guid       = guid,
-                            StandState = state
-                        });
-                    });
-                }
-            }
-
-            // a player out of range forgets the door, it is shown again when they come back
-            barnDoorsShown.RemoveWhere(e => mapInstance.GetEntity<IPlayer>(e.Player)?.GetVisible<IWorldEntity>(e.Door) == null);
-
             // open the doors once the new mission has all its spawns on the map, whichever layout it picked
             if (openDoorsFor == null)
                 return;
@@ -215,7 +187,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             openDoorsFor = null;
-            SetBarnDoors(StandState.State1);
+            OpenBarnDoors();
             log.LogInformation("Hycrest: mission spawns loaded, barn doors open.");
         }
 
@@ -265,11 +237,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     AddNpc(creature, worldEntity.Guid);
                     break;
                 case PublicEventCreature.BarnDoor:
-                    // one per hideout barn (Abandoned Barn, Sinnatus's Barn): open while players arrive, closed for the
-                    // briefing or regroup and the vote (retail video), open again when the mission starts
+                    // spawned by CloseBarnDoor, removed by OpenBarnDoors
                     barnDoors.Add(worldEntity.Guid);
-                    barnDoorStates[worldEntity.Guid] = StandState.State1;
-                    worldEntity.StandState = StandState.State1;
                     break;
                 case PublicEventCreature.AyitaSinnatus:
                 {
@@ -357,7 +326,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // everyone is gathered: Vesna's briefing, the three pitches, then the vote
             // solo, the first arrival also completes 189: Vesna starts shortly after Ayita's arrival line, while it is still up
             TimeSpan start = TimeSpan.FromSeconds(Math.Max(0d, barnArrivalLineEnd - sceneClock));
-            SetBarnDoors(StandState.State0, near: GetObjectiveLocation(HycrestMissions.RegroupAbandonedBarn));
+            CloseBarnDoor(HycrestMissions.RegroupAbandonedBarn);
             TimeSpan time = QueueLines(start, BarnBriefing, shortening: BarnLineShortening);
             time = QueueLines(time, MissionVotePitches, shortening: BarnLineShortening);
             sceneQueue.Enqueue(time, () => StartVote(HycrestMissions.GetVote(0, HycrestTrack.Tactical)));
@@ -552,26 +521,26 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Open or close the barn doors, only those of the hideout at <paramref name="near"/> if given.
+        /// Close the doorway of the hideout of <paramref name="regroupObjective"/>: its door appears.
         /// </summary>
-        private void SetBarnDoors(StandState state, Vector3? near = null)
+        private void CloseBarnDoor(uint regroupObjective)
+        {
+            if (BarnDoorPhases.TryGetValue(regroupObjective, out uint phase))
+                publicEvent.SetPhase(phase);
+        }
+
+        /// <summary>
+        /// Open every barn doorway: the doors disappear.
+        /// </summary>
+        private void OpenBarnDoors()
         {
             foreach (uint guid in barnDoors)
             {
                 IWorldEntity door = mapInstance.GetEntity<IWorldEntity>(guid);
-                if (door == null || near.HasValue && Vector3.Distance(door.Position, near.Value) > BarnDoorRange)
-                    continue;
-
-                barnDoorStates[guid] = state;
-                HycrestDropShip.SetState(door, state);
+                if (door is { InWorld: true })
+                    door.RemoveFromMap();
             }
-        }
-
-        private Vector3? GetObjectiveLocation(uint objectiveId)
-        {
-            PublicEventObjectiveEntry entry = gameTableManager.PublicEventObjective.GetEntry(objectiveId);
-            WorldLocation2Entry location = entry != null ? gameTableManager.WorldLocation2.GetEntry(entry.WorldLocation2Id) : null;
-            return location != null ? new Vector3(location.Position0, location.Position1, location.Position2) : null;
+            barnDoors.Clear();
         }
 
         private void UpdateRegroupParticipants()
@@ -585,7 +554,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public void OnRegroupComplete()
         {
-            SetBarnDoors(StandState.State0, near: GetObjectiveLocation(regroupObjective));
+            CloseBarnDoor(regroupObjective);
             sceneQueue.Enqueue(TimeSpan.Zero, NextTier);
         }
 
