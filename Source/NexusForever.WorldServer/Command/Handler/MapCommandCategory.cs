@@ -13,6 +13,8 @@ using NexusForever.Game.Static.RBAC;
 using NexusForever.WorldServer.Command.Context;
 using NexusForever.WorldServer.Command.Convert;
 
+using NexusForever.Network.World.Message.Model.Map;
+
 namespace NexusForever.WorldServer.Command.Handler
 {
     [Command(Permission.Map, "A collection of commands to manage maps.", "map")]
@@ -141,6 +143,28 @@ namespace NexusForever.WorldServer.Command.Handler
 
             publicEvent.SetObjectiveMapRegions(objectiveId, worldSocketId == 0u && worldLocation2Id == 0u ? [] : [(worldSocketId, worldLocation2Id)]);
             context.SendMessage($"Set region (socket {worldSocketId}, location {worldLocation2Id}) on objective {objectiveId} of public event {eventId}.");
+        }
+
+        [Command(Permission.MapUnload, "Dev: show or hide a map hex group (MapZoneHexGroup) on your map, e.g. the Hycrest groups 10-20.", "hexgroup")]
+        public void HandleMapHexGroup(ICommandContext context,
+            [Parameter("MapZoneHexGroup id.")]
+            uint hexGroupId,
+            [Parameter("1 shows it (default), 0 hides it.")]
+            uint? visible,
+            [Parameter("Colour as a number (default 0xFF00FF00, green; format not known yet).")]
+            uint? color,
+            [Parameter("Optional tooltip text id.")]
+            uint? tooltipTextId)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            player.Session.EnqueueMessageEncrypted(new ServerMapUpdateHexGroup
+            {
+                MapZoneHexGroupId      = hexGroupId,
+                TooltipLocalizedTextId = tooltipTextId ?? 0u,
+                Color                  = color ?? 0xFF00FF00u,
+                IsVisible              = (visible ?? 1u) != 0u
+            });
+            context.SendMessage($"Sent hex group {hexGroupId} (visible {(visible ?? 1u) != 0u}, colour 0x{color ?? 0xFF00FF00u:X8}).");
         }
 
         private static IPublicEvent GetRunningEvent(ICommandContext context, uint eventId)

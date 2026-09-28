@@ -293,20 +293,80 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             return loop;
         }
 
+        private class Walk
+        {
+            public List<Vector3> Loop;
+            public float Speed;
+            public double Remaining;
+        }
+
+        // patrols and spotlight lanes being walked, restarted by UpdateWalks when a round ends
+        private readonly Dictionary<uint, Walk> walks = [];
+
         /// <summary>
-        /// Walk <paramref name="loop"/> for ever, starting at node <paramref name="start"/>.
+        /// Walk <paramref name="loop"/> once from node <paramref name="start"/> back to it; <see cref="UpdateWalks"/> starts
+        /// the next round.
         /// </summary>
         /// <remarks>
-        /// LaunchSpline also sets the moving state and faces the entity where it walks.
+        /// One round per spline (OneShot) rather than a Cyclic spline: the server's Cyclic spline has no closing segment
+        /// (it jumped back to the start), and ending it on its start point left the client with a zero-length closing
+        /// segment (the scout stood still). LaunchSpline also sets the moving state and faces the entity where it walks.
         /// </remarks>
-        private static void LaunchLoop(IWorldEntity entity, List<Vector3> loop, int start, float speed)
+        private void LaunchLoop(IWorldEntity entity, List<Vector3> loop, int start, float speed)
         {
             List<Vector3> open = loop.Take(loop.Count - 1).ToList();
             List<Vector3> nodes = [.. open.Skip(start), .. open.Take(start)];
             nodes.Add(nodes[0]);
+            if (Vector3.Distance(entity.Position, nodes[0]) > 0.5f)
+                nodes.Insert(0, entity.Position);
+
+            float length = 0f;
+            for (int i = 1; i < nodes.Count; i++)
+                length += Vector3.Distance(nodes[i - 1], nodes[i]);
 
             entity.MovementManager.SetMode(ModeType.Walk);
-            entity.MovementManager.LaunchSpline(nodes, SplineType.Linear, SplineMode.Cyclic, speed);
+            entity.MovementManager.LaunchSpline(nodes, SplineType.Linear, SplineMode.OneShot, speed);
+
+            walks[entity.Guid] = new Walk
+            {
+                Loop      = loop,
+                Speed     = speed,
+                Remaining = length / speed + 0.25d
+            };
+        }
+
+        private void UpdateWalks(double lastTick)
+        {
+            foreach ((uint guid, Walk walk) in walks.ToList())
+            {
+                IWorldEntity entity = mapInstance.GetEntity<IWorldEntity>(guid);
+                if (entity == null || entity is IUnitEntity { IsAlive: false })
+                {
+                    walks.Remove(guid);
+                    continue;
+                }
+
+                // combat moves the unit, the patrol goes on from the nearest node afterwards
+                if (entity is IUnitEntity { InCombat: true })
+                {
+                    walk.Remaining = 0d;
+                    continue;
+                }
+
+                walk.Remaining -= lastTick;
+                if (walk.Remaining > 0d)
+                    continue;
+
+                LaunchLoop(entity, walk.Loop, NearestNode(walk.Loop, entity.Position), walk.Speed);
+            }
+        }
+
+        private static int NearestNode(List<Vector3> loop, Vector3 position)
+        {
+            int count = Math.Max(1, loop.Count - 1);
+            return Enumerable.Range(0, count)
+                .OrderBy(i => Vector3.Distance(loop[i], position))
+                .First();
         }
 
         private static void MoveTo(IWorldEntity entity, Vector3 destination, float speed)
@@ -325,6 +385,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 return;
 
             LinkAggro(millitheaGuards);
+            UpdateWalks(lastTick);
             UpdateMillithea();
             UpdatePrema();
             UpdateSpotlights(lastTick);
@@ -484,6 +545,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                     if (target == null)
                         break;
 
+                    walks.Remove(entity.Guid);
                     spotlight.State      = SpotlightState.Track;
                     spotlight.TargetGuid = target.Guid;
                     spotlight.Retrack    = 0d;
@@ -527,10 +589,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private static void ReturnToLane(IUnitEntity entity, Spotlight spotlight)
         {
             // the nearest node of the loop (without its closing node), patrol resumes from there
-            int count = Math.Max(1, spotlight.Loop.Count - 1);
-            spotlight.ReturnNode = Enumerable.Range(0, count)
-                .OrderBy(i => Vector3.Distance(spotlight.Loop[i], entity.Position))
-                .First();
+            spotlight.ReturnNode = NearestNode(spotlight.Loop, entity.Position);
             spotlight.State = SpotlightState.Return;
 
             Vector3 node = spotlight.Loop[spotlight.ReturnNode];

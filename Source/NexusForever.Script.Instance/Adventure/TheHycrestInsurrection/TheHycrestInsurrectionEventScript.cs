@@ -290,15 +290,21 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             TimeSpan shortening = default, bool gestures = false)
         {
             TimeSpan time = start;
-            foreach ((PublicEventCreature speaker, uint textId) in lines)
+            var list = lines.ToList();
+            for (int i = 0; i < list.Count; i++)
             {
+                (PublicEventCreature speaker, uint textId) = list[i];
                 sceneQueue.Enqueue(time, () =>
                 {
                     // the argument during a vote stops once the vote is over (solo, it ends as soon as you vote)
                     if (!whileVoting || voteInProgress)
                         dialogue.Say(GetNpc(speaker), textId, gestures && speaker != PublicEventCreature.AyitaSinnatus || UsesGesture(speaker));
                 });
-                TimeSpan duration = GetLineDuration(textId) - shortening;
+
+                // shortened only when someone else speaks next: an NPC's next line replaces its speech bubble, so its own
+                // lines back to back keep their full time (they were cut off)
+                bool sameSpeakerNext = i + 1 < list.Count && list[i + 1].Speaker == speaker;
+                TimeSpan duration = GetLineDuration(textId) - (sameSpeakerNext ? TimeSpan.Zero : shortening);
                 time += shortening > TimeSpan.Zero && duration < BarnMinLineGap ? BarnMinLineGap : duration;
             }
 
