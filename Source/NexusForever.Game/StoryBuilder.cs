@@ -35,14 +35,16 @@ namespace NexusForever.Game
         /// <summary>
         /// Sends a story communicator window to the <see cref="IPlayer"/>.
         /// </summary>
-        public void SendStoryCommunicator(uint textId, uint creatureId, IPlayer player, uint durationMs = 10000, StoryPanelType storyPanelType = StoryPanelType.Default, WindowType windowTypeId = WindowType.LeftAligned, uint soundEventId = 0, byte priority = 0)
+        public void SendStoryCommunicator(uint textId, uint creatureId, IPlayer player, uint durationMs = 10000, StoryPanelType storyPanelType = StoryPanelType.Default, WindowType windowTypeId = WindowType.LeftAligned, uint soundEventId = 0, byte priority = 0, uint voiceSoundEventId = 0)
         {
             if (textId == 0)
                 throw new ArgumentOutOfRangeException(nameof(textId));
 
+            // voice line played with the message, like StoryPanel's SoundEventId for story panels
             var storyMessage = new StoryMessage
             {
-                MsgId = textId
+                MsgId       = textId,
+                GeneralVoId = voiceSoundEventId
             };
             storyMessage.AddCreature(creatureId);
             storyMessage.AddPlayer(BuildPlayer(player));

@@ -1,12 +1,10 @@
 using System.Text.RegularExpressions;
 using NexusForever.Game.Abstract.Entity;
-using NexusForever.Game.Static.Chat;
 using NexusForever.Game.Static.Entity;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Entity;
 using NexusForever.Network.World.Message.Model;
-using NexusForever.Network.World.Message.Model.Chat;
 
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
@@ -14,7 +12,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// Plays scripted NPC lines from en-US.bin as NPC say (speech bubble and chat).
     /// </summary>
     /// <remarks>
-    /// Lines are sent as text ids (ServerChatNPC), so the client shows them in the player's language and plays their voice.
+    /// Lines are resolved to English text on the server. Voice cues are sound only and never sent as chat (see HYCREST.md).
     /// </remarks>
     public partial class HycrestDialogue
     {
@@ -74,21 +72,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             string raw = gameTableManager.TextEnglish.GetEntry(textId) ?? string.Empty;
-
-            // the text id (not resolved text) lets the client play the line's own $(self.visual=...) voice and the
-            // speaker's voice; the channel's chat id is the speaking unit (to confirm in game)
-            var message = new ServerChatNPC
-            {
-                Channel = new Channel
-                {
-                    ChatChannelId = ChatChannelType.NPCSay,
-                    ChatId        = speaker.Guid
-                },
-                UnitNameLocalizedTextId = gameTableManager.Creature2.GetEntry(speaker.CreatureId)?.LocalizedTextIdName ?? 0u,
-                MessageLocalizedTextId  = textId
-            };
-
-            speaker.EnqueueToVisible(message);
+            speaker.NpcSay(GetText(textId));
 
             if (gesture ?? SelfVisualRegex().IsMatch(raw))
                 PlayTalk(speaker);

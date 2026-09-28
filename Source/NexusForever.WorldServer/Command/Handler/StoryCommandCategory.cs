@@ -8,6 +8,8 @@ using NexusForever.Game.Static;
 using NexusForever.Game.Static.RBAC;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
+using NexusForever.Network.World.Message.Model;
+using NexusForever.Network.World.Message.Model.Shared;
 using NexusForever.Shared;
 using NexusForever.WorldServer.Command.Context;
 using NexusForever.WorldServer.Command.Convert;
@@ -44,16 +46,49 @@ namespace NexusForever.WorldServer.Command.Handler
         }
 
         // local dev aid (not for upstream): identify voice lines (SoundEvent.tbl ids) by ear
-        [Command(Permission.StoryCommunicator, "Dev: play a sound event (e.g. a voice line) in a short communicator window.", "sound")]
+        [Command(Permission.StoryCommunicator, "Dev: play a sound event (voice line). Mode 0 communicator with text, 1 communicator without text, 2 hidden story panel.", "sound")]
         public void HandleSound(ICommandContext context,
             [Parameter("SoundEvent id to play.")]
             uint soundEventId,
-            [Parameter("Optional creature id for the portrait (default: the Caretaker).")]
-            uint? creatureId)
+            [Parameter("Optional mode: 0 communicator with text (default), 1 communicator without text, 2 story panel hidden at once.")]
+            uint? mode)
         {
-            StoryBuilder.Instance.SendStoryCommunicator(515639, creatureId ?? 53309u, context.GetTargetOrInvoker<IPlayer>(), 3000,
-                soundEventId: soundEventId);
-            context.SendMessage($"Played sound event {soundEventId}.");
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            switch (mode ?? 0u)
+            {
+                case 1u:
+                {
+                    var storyMessage = new StoryMessage
+                    {
+                        GeneralVoId = soundEventId
+                    };
+                    player.Session.EnqueueMessageEncrypted(new ServerStoryCommunicatorShow
+                    {
+                        StoryMessage = storyMessage,
+                        SoundEventId = 53309u,
+                        DurationMs   = 1u
+                    });
+                    break;
+                }
+                case 2u:
+                {
+                    var storyMessage = new StoryMessage
+                    {
+                        GeneralVoId = soundEventId
+                    };
+                    player.Session.EnqueueMessageEncrypted(new ServerStoryPanelShow
+                    {
+                        StoryMessage = storyMessage
+                    });
+                    player.Session.EnqueueMessageEncrypted(new ServerStoryPanelHide());
+                    break;
+                }
+                default:
+                    StoryBuilder.Instance.SendStoryCommunicator(515639, 53309u, player, 3000, voiceSoundEventId: soundEventId);
+                    break;
+            }
+
+            context.SendMessage($"Played sound event {soundEventId} (mode {mode ?? 0u}).");
         }
 
         [Command(Permission.StoryPanel, "Send a story panel to a character.", "panel", "p")]

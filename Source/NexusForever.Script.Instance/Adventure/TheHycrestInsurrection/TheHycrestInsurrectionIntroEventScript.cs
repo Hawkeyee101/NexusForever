@@ -56,9 +56,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // hologram talks, then Dawson comes out of the door where the hologram was (once the ship has arrived)
         private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(20);
         private static readonly TimeSpan SyncDelay          = BlackScreen;
-        private static readonly TimeSpan IntroLineDelay     = BlackScreen + TimeSpan.FromSeconds(1.5);
         private static readonly TimeSpan DawsonArrivalWait  = TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan Message1Delay      = IntroLineDelay + TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan Message1Delay      = BlackScreen + TimeSpan.FromSeconds(1.5);
         private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(10);
         private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(10);
         private const uint DawsonPhase = 1u;
@@ -68,12 +67,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint CaretakerMessage2          = 534607u;
         private const uint CaretakerMessageDurationMs = 10000u;
 
-        // Caretaker voice lines (AdventureVO_General_Caretaker, used by every adventure). Retail on arrival: "Do not think that
-        // you are impervious to harm, simply because this is a simulation." (text 745370, Intro_02). The line heard with the
-        // first narration message ("...good luck, you're going to need it") has no text in the tables; Intro_04 (the only
-        // intro without a text) is a guess, to confirm by ear
-        private const uint CaretakerIntroLine     = 745370u;
-        private const uint CaretakerIntroSound    = 48289u; // Play_AdventureVO_General_Caretaker_Intro_02
+        // Caretaker voice cues are sound only, never shown as text. Arrival ("Do not think that you are impervious to harm...",
+        // Intro_02) plays inside the black-screen cinematic (HycrestInsurrectionOnEnter). The line heard with the first
+        // narration message ("...good luck, you're going to need it") has no text in the tables; Intro_04 (the only intro
+        // without a text) is a guess, to confirm by ear; it is the voice of that message
         private const uint CaretakerMessage1Sound = 48291u; // Play_AdventureVO_General_Caretaker_Intro_04 (guess)
 
         // the two Caretaker messages are the portrait pop-ups (the story communicator's default window type). Window types 2
@@ -291,7 +288,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
             actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
-            actionQueue.Enqueue(IntroLineDelay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerIntroLine, CaretakerIntroSound)));
             actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1, CaretakerMessage1Sound)));
             actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage2)));
 
@@ -352,7 +348,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private void PlayNarration(IPlayer player, uint textId, uint soundEventId = 0u)
         {
             storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs,
-                soundEventId: soundEventId);
+                voiceSoundEventId: soundEventId);
             PlayHologramTalk();
         }
 

@@ -55,21 +55,21 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             (PublicEventCreature.LysionSinnatus, 464076u)  // Militant: "Ayita, how many times must I tell you?..."
         ];
 
-        // voiced short lines (AdventureVO_HycrestInsurrection, $(self.visual=...) sound effects) said together with a dialogue
-        // line: retail plays Vesna's "A new opportunity has presented itself." with her first briefing line (video). Ayita's
-        // with her pitch is inferred from the pattern (each spokesperson has NewMission / MissionStart / MissionComplete).
-        // Lysion's voice lines (sounds 48305-48307) have no text, so they can't be played this way.
-        private static readonly Dictionary<uint, uint> VoiceLines = new()
+        // voice cues (Play_AdventureVO_HycrestInsurrection_*), sound only, never shown as text: retail plays Vesna's "A new
+        // opportunity has presented itself." with her first briefing line and "Show them no mercy." when her mission wins
+        // (video); Lysion's "Don't back down..." with his last pitch line (inferred NewMission). Not played yet: there is no
+        // confirmed sound-only way outside a cinematic (to test with the story sound dev command, see HYCREST.md)
+        private static readonly Dictionary<uint, uint> VoiceCues = new()
         {
-            [160643u] = 745319u, // Vesna NewMission
-            [464075u] = 745316u  // Ayita NewMission: "There's some folk what could use your help."
+            [160643u] = 48310u, // Vesna NewMission
+            [464076u] = 48307u  // Lysion NewMission (inferred)
         };
 
-        // said when the speaker's mission wins the vote: Ayita "Be careful now, love!", Vesna "Show them no mercy." (video)
-        private static readonly Dictionary<PublicEventCreature, uint> MissionStartLines = new()
+        private static readonly Dictionary<PublicEventCreature, uint> MissionStartCues = new()
         {
-            [PublicEventCreature.AyitaSinnatus] = 745315u,
-            [PublicEventCreature.VesnaTaranoft] = 745318u
+            [PublicEventCreature.AyitaSinnatus]  = 48303u, // "Be careful now, love!"
+            [PublicEventCreature.VesnaTaranoft]  = 48309u, // "Show them no mercy."
+            [PublicEventCreature.LysionSinnatus] = 48305u
         };
 
         // speech pacing: at least MinLineSeconds per line, longer lines get more time
@@ -203,8 +203,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             TimeSpan time = start;
             foreach ((PublicEventCreature speaker, uint textId) in lines)
             {
-                if (VoiceLines.TryGetValue(textId, out uint voiceLine))
-                    sceneQueue.Enqueue(time, () => dialogue.Say(GetNpc(speaker), voiceLine, false));
                 sceneQueue.Enqueue(time, () => dialogue.Say(GetNpc(speaker), textId, UsesGesture(speaker)));
                 time += GetLineDuration(textId);
             }
@@ -294,8 +292,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // a vote that times out finishes during the public event manager update, creating an event there would modify
             // the collection being enumerated, so everything runs from the scene queue on the following ticks
             (uint eventId, PublicEventCreature speaker, uint outcomeText, uint communicatorText) = MissionVoteOptions[winner];
-            if (MissionStartLines.TryGetValue(speaker, out uint missionStartLine))
-                sceneQueue.Enqueue(TimeSpan.Zero, () => dialogue.Say(GetNpc(speaker), missionStartLine, false));
             sceneQueue.Enqueue(TimeSpan.Zero, () => dialogue.Say(GetNpc(speaker), outcomeText, UsesGesture(speaker)));
             if (communicatorText != 0u)
                 sceneQueue.Enqueue(OutcomeCommunicatorDelay, () =>

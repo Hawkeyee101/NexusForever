@@ -51,6 +51,9 @@ namespace NexusForever.Game.Cinematic.Cinematics
         private const ushort BlackFadeIn    = 200;
         private const uint   FadeTransition = 2u; // 3 held white (the hold works), 1 didn't fade at all
 
+        private const uint CaretakerIntroVoice = 34515u;
+        private const uint CaretakerIntroAt    = 2000u;
+
 
         protected override void Setup()
         {
@@ -82,6 +85,13 @@ namespace NexusForever.Game.Cinematic.Cinematics
                     new VisualEffect(SyncHologramVisualEffect, ship.Guid, initialDelay: FadeInAt, duration: SyncDuration)
                 ]);
             }
+
+            // the Caretaker's arrival voice, sound only (visual 34515 plays Play_AdventureVO_General_Caretaker_Intro_02,
+            // "Do not think that you are impervious to harm, simply because this is a simulation.")
+            Keyframes.Add("CaretakerIntro",
+            [
+                new VisualEffect(CaretakerIntroVoice, Player.Guid, initialDelay: CaretakerIntroAt)
+            ]);
 
             // no subtitles: the intro event script sends the Caretaker's narration after the black screen, as story
             // communicators (a cinematic hides story windows)
