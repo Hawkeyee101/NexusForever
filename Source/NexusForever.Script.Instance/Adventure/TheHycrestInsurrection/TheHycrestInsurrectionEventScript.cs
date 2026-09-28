@@ -28,7 +28,28 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             [420u] = (PublicEventCreature.AyitaSinnatus,  465550u, 444047u), // "Prema's father Tarquim is right outside..."
             [421u] = (PublicEventCreature.VesnaTaranoft,  465551u, 0u),      // "Be quick about finding Groo..."
-            [422u] = (PublicEventCreature.LysionSinnatus, 465552u, 444107u)  // "Once we've compromised their shields..."
+            [422u] = (PublicEventCreature.LysionSinnatus, 465552u, 444107u), // "Once we've compromised their shields..."
+            // vote 46; Vesna says the families line in the retail video; communicators not known yet
+            [423u] = (PublicEventCreature.VesnaTaranoft,  465556u, 0u),      // "Thank you. Those families deserve the chance..."
+            [424u] = (PublicEventCreature.VesnaTaranoft,  465557u, 0u),      // "Be careful as you move around the city..."
+            [425u] = (PublicEventCreature.LysionSinnatus, 465558u, 0u)       // "Deliver my army to freedom..."
+        };
+
+        // the scene before a vote at a regroup (retail video, Sinnatus's Barn after The Farmer's Daughter): the lead lines,
+        // then the vote starts with the first line of the argument, which goes on while the players vote
+        private static readonly Dictionary<uint, ((PublicEventCreature Speaker, uint TextId)[] Lead, (PublicEventCreature Speaker, uint TextId)[] DuringVote)> VoteScenes = new()
+        {
+            [46u] = (
+                [
+                    (PublicEventCreature.AyitaSinnatus,  466943u)  // "Father, that's not fair! Vesna has seen to everything we need..."
+                ],
+                [
+                    (PublicEventCreature.LysionSinnatus, 464175u), // "I don't know why we're even discussing this... we'll need an army!"
+                    (PublicEventCreature.VesnaTaranoft,  464191u), // "We have all the army we need right here, Lysion..."
+                    (PublicEventCreature.AyitaSinnatus,  464213u), // "Have you two forgotten what we're fighting for?..."
+                    (PublicEventCreature.VesnaTaranoft,  464254u), // "We also need the people of Hycrest on our side..."
+                    (PublicEventCreature.LysionSinnatus, 464259u)  // "Enough! Neither of those things is of any use..."
+                ])
         };
 
         // barn scene, en-US text ids in speaking order (retail video); gestures for Vesna and Lysion
@@ -233,12 +254,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// <summary>
         /// Queue <paramref name="lines"/> one after another starting after <paramref name="start"/>, returns when the last line ends.
         /// </summary>
-        private TimeSpan QueueLines(TimeSpan start, IEnumerable<(PublicEventCreature Speaker, uint TextId)> lines)
+        private TimeSpan QueueLines(TimeSpan start, IEnumerable<(PublicEventCreature Speaker, uint TextId)> lines, bool whileVoting = false)
         {
             TimeSpan time = start;
             foreach ((PublicEventCreature speaker, uint textId) in lines)
             {
-                sceneQueue.Enqueue(time, () => dialogue.Say(GetNpc(speaker), textId, UsesGesture(speaker)));
+                sceneQueue.Enqueue(time, () =>
+                {
+                    // the argument during a vote stops once the vote is over (solo, it ends as soon as you vote)
+                    if (!whileVoting || voteInProgress)
+                        dialogue.Say(GetNpc(speaker), textId, UsesGesture(speaker));
+                });
                 time += GetLineDuration(textId);
             }
 
@@ -512,8 +538,18 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             }
 
             uint voteId = HycrestMissions.GetVote(nextTier, tracks[HycrestMissions.InterludeTier]);
-            if (voteId != 0u)
+            if (voteId == 0u)
+                return;
+
+            if (!VoteScenes.TryGetValue(voteId, out var scene))
+            {
                 StartVote(voteId);
+                return;
+            }
+
+            TimeSpan time = QueueLines(TimeSpan.Zero, scene.Lead);
+            sceneQueue.Enqueue(time, () => StartVote(voteId));
+            QueueLines(time, scene.DuringVote, whileVoting: true);
         }
 
         private void CompleteRun()
