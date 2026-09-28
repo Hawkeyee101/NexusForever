@@ -73,17 +73,18 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         // tracking: a player within the aggro range pulls the spotlight off its lane towards them, slower than a running
         // player; it gives up (hard cap) when the player is further than the drop range from it or it would leave its
         // lane by more than the leash, then returns to the nearest point of its lane and patrols on
-        private const float SpotlightAggroRange = 10f;
-        private const float SpotlightDropRange = 16f;
+        // aggro reaches past the light itself (like an NPC's aggro, shorter)
+        private const float SpotlightAggroRange = 15f;
+        private const float SpotlightDropRange = 20f;
         private const float SpotlightLeash = 15f;
         private const float SpotlightTrackSpeed = 3.5f;
         private const float SpotlightReturnSpeed = 4f;
         private static readonly TimeSpan SpotlightRetrackInterval = TimeSpan.FromSeconds(0.5);
 
-        // the alarm: crossing this line (spline 4648, 77 m across the field north of Millithea) calls a Recon Specialist
-        // this far from the party, towards Prema. Retail's trigger isn't in the tables; the specialist was measured at
-        // -2413, -1587, between Millithea and Prema
-        private const uint AlarmSpline = 4648u;
+        // the alarm: crossing this line calls a Recon Specialist this far from the party, towards Prema. Retail's trigger
+        // isn't in the tables; the specialist was measured at -2413, -1587, between Millithea and Prema. Spline 4588
+        // (60 m between Millithea and Prema, 4648 north of Millithea triggered too early)
+        private const uint AlarmSpline = 4588u;
         private const float AlarmLineRange = 3f;
         private const float AlarmSpawnDistance = 20f;
         private const float PartyRange = 30f;
