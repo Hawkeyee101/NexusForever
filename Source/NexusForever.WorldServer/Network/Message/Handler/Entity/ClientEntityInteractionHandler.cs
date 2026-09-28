@@ -63,6 +63,15 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Entity
             {
                 case 37: // Quest NPC
                 {
+                    // only open a dialog when the NPC has something to show: an empty dialog is closed by the client right
+                    // away (interaction event 101), and the NPC's speech bubble said at that moment (e.g. a public event
+                    // TalkTo target answering) never shows
+                    if (!HasDialog(entity))
+                    {
+                        log.LogTrace($"No dialog for entity {entityInteraction.Guid} (creature {entity?.CreatureId}), it has no quests or gossip.");
+                        break;
+                    }
+
                     session.EnqueueMessageEncrypted(new ServerDialogStart
                     {
                         DialogUnitId = entityInteraction.Guid
@@ -106,6 +115,17 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Entity
                     log.LogWarning($"Received unhandled interaction event {entityInteraction.Event} from Entity {entityInteraction.Guid}");
                     break;
             }
+        }
+
+        private static bool HasDialog(IWorldEntity entity)
+        {
+            // unknown creature data: keep the previous behaviour
+            if (entity?.CreatureInfo?.Entry is not { } creature)
+                return true;
+
+            return creature.GossipSetId != 0u
+                || creature.QuestIdGiven.Any(q => q != 0u)
+                || creature.QuestIdReceive.Any(q => q != 0u);
         }
 
         private void HandleVendor(IWorldSession session, IWorldEntity worldEntity)
