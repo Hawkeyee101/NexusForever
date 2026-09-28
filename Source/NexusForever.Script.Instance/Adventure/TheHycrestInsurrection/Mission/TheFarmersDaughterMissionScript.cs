@@ -342,6 +342,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             entity.MovementManager.SetMode(ModeType.Walk);
             entity.MovementManager.LaunchSpline(nodes, SplineType.Linear, SplineMode.OneShot, speed);
+            log.LogDebug($"Hycrest: walk round for {entity.Guid} (creature {entity.CreatureId}) from node {start}, {nodes.Count} nodes, {length:0.0} m, {length / speed:0.0} s, first {nodes[0]} last {nodes[^1]}.");
 
             walks[entity.Guid] = new Walk
             {
