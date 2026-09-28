@@ -70,7 +70,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly HycrestTrack[] tracks = new HycrestTrack[HycrestMissions.TierCount];
 
         private readonly TimedActionQueue sceneQueue = new();
-        private readonly Dictionary<PublicEventCreature, uint> npcGuids = [];
+        // the story NPCs can stand in more than one hideout (Abandoned Barn, and the one the players regroup at)
+        private readonly Dictionary<PublicEventCreature, List<uint>> npcGuids = [];
+
+        // phase of the main event with the NPCs of a hideout, set when the players regroup there
+        private static readonly Dictionary<uint, uint> HideoutPhases = new()
+        {
+            [HycrestMissions.RegroupSinnatusBarn] = 11u
+        };
+        private readonly List<uint> barnDoors = [];
+        private uint regroupObjective;
+
+        // a barn door belongs to the hideout whose regroup point is this close
+        private const float BarnDoorRange = 40f;
         private bool barnArrivalPlayed;
         private double sceneClock;
         private double barnArrivalLineEnd;
@@ -166,16 +178,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             {
                 case PublicEventCreature.VesnaTaranoft:
                 case PublicEventCreature.LysionSinnatus:
-                    npcGuids[creature] = worldEntity.Guid;
+                    AddNpc(creature, worldEntity.Guid);
                     break;
                 case PublicEventCreature.BarnDoor:
-                    // open while players arrive, closed for the briefing and the vote (retail video)
-                    npcGuids[creature] = worldEntity.Guid;
+                    // one per hideout barn (Abandoned Barn, Sinnatus's Barn): open while players arrive, closed for the
+                    // briefing or regroup and the vote (retail video), open again when the mission starts
+                    barnDoors.Add(worldEntity.Guid);
                     worldEntity.StandState = StandState.State1;
                     break;
                 case PublicEventCreature.AyitaSinnatus:
                 {
-                    npcGuids[creature] = worldEntity.Guid;
+                    AddNpc(creature, worldEntity.Guid);
                     // retail: she sits on top of the hay bales; stand state is a stat, so players arriving later see it too
                     worldEntity.StandState = StandState.Sit;
                     break;
@@ -183,9 +196,27 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             }
         }
 
+        private void AddNpc(PublicEventCreature creature, uint guid)
+        {
+            if (!npcGuids.TryGetValue(creature, out List<uint> guids))
+                npcGuids[creature] = guids = [];
+            guids.Add(guid);
+        }
+
+        /// <summary>
+        /// Return the NPC nearest to the players, the one in the hideout they are at.
+        /// </summary>
         private IWorldEntity GetNpc(PublicEventCreature creature)
         {
-            return npcGuids.TryGetValue(creature, out uint guid) ? mapInstance.GetEntity<IWorldEntity>(guid) : null;
+            if (!npcGuids.TryGetValue(creature, out List<uint> guids))
+                return null;
+
+            Vector3? players = mapInstance.GetPlayers().FirstOrDefault()?.Position;
+            return guids
+                .Select(guid => mapInstance.GetEntity<IWorldEntity>(guid))
+                .Where(e => e != null)
+                .OrderBy(e => players.HasValue ? Vector3.Distance(e.Position, players.Value) : 0f)
+                .FirstOrDefault();
         }
 
         private static bool UsesGesture(PublicEventCreature speaker)
@@ -234,7 +265,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // everyone is gathered: Vesna's briefing, the three pitches, then the vote
             // solo, the first arrival also completes 189, so wait for Ayita's arrival line to finish
             TimeSpan start = TimeSpan.FromSeconds(Math.Max(0d, barnArrivalLineEnd - sceneClock));
-            HycrestDropShip.SetState(GetNpc(PublicEventCreature.BarnDoor), StandState.State0);
+            SetBarnDoors(StandState.State0, near: GetObjectiveLocation(HycrestMissions.RegroupAbandonedBarn));
             TimeSpan time = QueueLines(start, BarnBriefing);
             time = QueueLines(time, MissionVotePitches);
             sceneQueue.Enqueue(time, () => StartVote(HycrestMissions.GetVote(0, HycrestTrack.Tactical)));
@@ -327,7 +358,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             tier = missionTier;
             tracks[missionTier] = track;
 
-            HycrestDropShip.SetState(GetNpc(PublicEventCreature.BarnDoor), StandState.State1);
+            SetBarnDoors(StandState.State1);
 
             foreach (IPlayer player in mapInstance.GetPlayers())
                 HycrestPublicEvent.JoinPublicTeam(mission, player);
@@ -388,7 +419,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     HycrestPublicEvent.JoinPublicTeam(regroup, player);
             }
 
+            regroupObjective = objectiveId;
+            if (HideoutPhases.TryGetValue(objectiveId, out uint phase))
+                publicEvent.SetPhase(phase);
             regroup.InvokeScriptCollection<IHycrestRegroupScript>(s => s.StartRegroup(objectiveId, (uint)mapInstance.PlayerCount));
+        }
+
+        /// <summary>
+        /// Open or close the barn doors, only those of the hideout at <paramref name="near"/> if given.
+        /// </summary>
+        private void SetBarnDoors(StandState state, Vector3? near = null)
+        {
+            foreach (uint guid in barnDoors)
+            {
+                IWorldEntity door = mapInstance.GetEntity<IWorldEntity>(guid);
+                if (door == null || near.HasValue && Vector3.Distance(door.Position, near.Value) > BarnDoorRange)
+                    continue;
+
+                HycrestDropShip.SetState(door, state);
+            }
+        }
+
+        private Vector3? GetObjectiveLocation(uint objectiveId)
+        {
+            PublicEventObjectiveEntry entry = gameTableManager.PublicEventObjective.GetEntry(objectiveId);
+            WorldLocation2Entry location = entry != null ? gameTableManager.WorldLocation2.GetEntry(entry.WorldLocation2Id) : null;
+            return location != null ? new Vector3(location.Position0, location.Position1, location.Position2) : null;
         }
 
         private void UpdateRegroupParticipants()
@@ -402,6 +458,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public void OnRegroupComplete()
         {
+            SetBarnDoors(StandState.State0, near: GetObjectiveLocation(regroupObjective));
             sceneQueue.Enqueue(TimeSpan.Zero, NextTier);
         }
 
