@@ -77,6 +77,21 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
+        /// Return true if <paramref name="local"/> (an offset in the ship's frame) is aboard: on the deck or on one of the
+        /// ramps (the right ramp runs from local (6.3, -3.0, -17.1) down to (15.6, -9.2, -17.2), the left one mirrored).
+        /// </summary>
+        /// <remarks>
+        /// Used to tell if a player has left the ship: the client's platform reports can't be relied on (they stopped while
+        /// the ship flew with the player standing on it, 28 Sep 2026).
+        /// </remarks>
+        public static bool IsAboard(Vector3 local)
+        {
+            return local.Y > -10.5f && local.Y < 1f
+                && MathF.Abs(local.X) < 17f
+                && MathF.Abs(local.Z) < 25f;
+        }
+
+        /// <summary>
         /// Return true if <paramref name="local"/> (an offset in the ship's frame) is on the deck, inside the hull.
         /// </summary>
         public static bool IsOnDeck(Vector3 local)

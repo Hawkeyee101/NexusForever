@@ -31,7 +31,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             public bool Boarded;
             public double SinceLoaded;
             public double SinceBoarded;
-            public bool OnPlatformConfirmed;
             public bool ReachedDeck;
             public double SinceCast;
             public float SampleY;
@@ -54,9 +53,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const double RocketFallRecast = 2.9d;
         // a cast that didn't take (e.g. the player was still casting) is tried again this soon
         private const double RocketFallRetry = 0.25d;
-
-        // fallback when the platform attachment isn't reported: a player this far below the deck has left the ship
-        private const float LeaveDistance = 3f;
 
         // landed: within LandedHeight of the terrain (map file; props like roofs aren't in it), or no longer falling
         // (moved less than LandedMaxDrop vertically within LandedWindow) once the player has fallen for at least
@@ -294,7 +290,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
                 // only players actually still on the deck: someone who already fell or walked off stays where they are
                 if (departingShip != null
-                    && !HycrestShipLayout.IsOnDeck(HycrestShipLayout.ToShip(player.Position, departingShip.Position, departingShip.Rotation.X)))
+                    && !HycrestShipLayout.IsAboard(HycrestShipLayout.ToShip(player.Position, departingShip.Position, departingShip.Rotation.X)))
                 {
                     drop.State = DropState.Landed;
                     continue;
@@ -412,27 +408,24 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void UpdateOnBoard(IPlayer player, PlayerDrop drop)
         {
-            // the client reports the platform it stands on; once the player has stood on the ship, stepping off it is
-            // leaving the ship, detected on the next tick
-            bool onShip = ShipGuid != 0u && player.MovementManager.GetPlatform() == ShipGuid;
-            if (onShip)
+            // aboard = inside the ship's volume (deck and ramps) in the ship's own frame, wherever it is and however it is
+            // turned; the client's platform reports stopped while the ship flew with the player standing on it
+            IWorldEntity ship = map.GetEntity<IWorldEntity>(ShipGuid);
+            if (ship == null)
+                return;
+
+            Vector3 local = HycrestShipLayout.ToShip(player.Position, ship.Position, ship.Rotation.X);
+            if (HycrestShipLayout.IsAboard(local))
             {
-                drop.OnPlatformConfirmed = true;
-                drop.ReachedDeck         = true;
+                drop.ReachedDeck = true;
                 return;
             }
 
             // right after boarding the teleport hasn't completed yet and the position is still on the ground
-            float y = player.Position.Y;
             if (!drop.ReachedDeck)
-            {
-                if (y > HycrestShipLayout.FloorY - 1f)
-                    drop.ReachedDeck = true;
                 return;
-            }
 
-            if (drop.OnPlatformConfirmed || y < HycrestShipLayout.FloorY - LeaveDistance)
-                StartFalling(player, drop);
+            StartFalling(player, drop);
         }
 
         private void StartFalling(IPlayer player, PlayerDrop drop)

@@ -65,7 +65,8 @@ namespace NexusForever.Game.Cinematic.Cinematics
             InitialCancelMode = CancelModeOverride ?? 0; // retail can't be skipped (2 showed "Esc to skip")
             CinematicId       = 0;
 
-            StartTransition = new Transition(0, 1, 2, 1500, 0, 1500);
+            // black almost at once (was a 1.5 s fade): the player shouldn't see the world before everything is in place
+            StartTransition = new Transition(0, 1, 2, 100, 0, 1500);
             EndTransition   = new Transition(FadeInAt, 0, 0);
 
             var origin = new Position(SetOrigin);
