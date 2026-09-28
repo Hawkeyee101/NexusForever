@@ -62,6 +62,14 @@ namespace NexusForever.Script.Template
         }
 
         /// <summary>
+        /// Invoked when <see cref="IPlayer"/> interacts with a <see cref="IWorldEntity"/> (e.g. talks to an NPC) on the map
+        /// the public event is on and the interaction counts towards objectives.
+        /// </summary>
+        void OnEntityInteract(IPlayer player, IWorldEntity entity)
+        {
+        }
+
+        /// <summary>
         /// Invoked when a vote on the public event has finished.
         /// </summary>
         void OnVoteFinished(uint voteId, uint winner)

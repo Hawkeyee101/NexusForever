@@ -122,7 +122,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </remarks>
         public static readonly IReadOnlyDictionary<uint, uint> RegroupAfter = new Dictionary<uint, uint>
         {
-            [420u] = RegroupArcwulffFarm,
+            [420u] = RegroupSinnatusBarn, // retail video; the payoff text offers the Arcwulff farmhouse
             [421u] = RegroupSinnatusBarn,
             [422u] = RegroupSinnatusBarn,
             [423u] = RegroupBellFarmhouse,

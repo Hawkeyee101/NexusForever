@@ -19,6 +19,12 @@ namespace NexusForever.Game.Abstract.Entity
     {
         EntityType Type { get; }
         EntityCreateFlag CreateFlags { get; set; }
+
+        /// <summary>
+        /// While set, interacting with the entity doesn't count towards quest or public event objectives, e.g. a captive
+        /// that can only be freed once its guards are dead.
+        /// </summary>
+        bool InteractionBlocked { get; set; }
         Vector3 Rotation { get; set; }
         public WorldZoneEntry Zone { get; }
 

@@ -61,6 +61,12 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void OnEntityKilled(IUnitEntity unit);
 
         /// <summary>
+        /// Invoked when <see cref="IPlayer"/> interacts with a <see cref="IWorldEntity"/> on the owner <see cref="IBaseMap"/>
+        /// and the interaction counts towards objectives.
+        /// </summary>
+        void OnEntityInteract(IPlayer player, IWorldEntity entity);
+
+        /// <summary>
         /// Update any objective for any public event <see cref="IPlayer"/> is part of that meets the supplied <see cref="PublicEventObjectiveType"/>, objectId and count.
         /// </summary>
         void UpdateObjective(IPlayer player, PublicEventObjectiveType type, uint objectId, int count);

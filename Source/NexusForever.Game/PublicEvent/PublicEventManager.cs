@@ -221,6 +221,15 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
+        /// Invoked when <see cref="IPlayer"/> interacts with a <see cref="IWorldEntity"/> on the owner <see cref="IBaseMap"/>
+        /// and the interaction counts towards objectives.
+        /// </summary>
+        public void OnEntityInteract(IPlayer player, IWorldEntity entity)
+        {
+            InvokeScriptCollection<IPublicEventScript>(s => s.OnEntityInteract(player, entity));
+        }
+
+        /// <summary>
         /// Update any objective for any public event <see cref="IPlayer"/> is part of that meets the supplied <see cref="PublicEventObjectiveType"/>, objectId and count.
         /// </summary>
         public void UpdateObjective(IPlayer player, PublicEventObjectiveType type, uint objectId, int count)

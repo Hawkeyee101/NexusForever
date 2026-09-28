@@ -40,8 +40,15 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Entity
             {
                 log.LogTrace($"Ignored objective credit for interaction with entity {entity.Guid} (creature {entity.CreatureId}), {Vector3.Distance(session.Player.Position, entity.Position):0.0} m away.");
             }
+            else if (entity?.InteractionBlocked == true)
+            {
+                log.LogTrace($"Ignored objective credit for interaction with entity {entity.Guid} (creature {entity.CreatureId}), interaction blocked.");
+            }
             else if (entity != null)
             {
+                // the event scripts hear about it first, e.g. to play the NPC's line before the objective completes
+                entity.Map.PublicEventManager.OnEntityInteract(session.Player, entity);
+
                 session.Player.QuestManager.ObjectiveUpdate(QuestObjectiveType.ActivateEntity, entity.CreatureId, 1u);
                 session.Player.QuestManager.ObjectiveUpdate(QuestObjectiveType.TalkTo, entity.CreatureId, 1u);
 
