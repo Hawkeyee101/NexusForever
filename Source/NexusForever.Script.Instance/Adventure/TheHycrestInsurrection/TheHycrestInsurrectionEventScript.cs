@@ -131,9 +131,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         // the doors open once the mission after a vote has everything on the map (any layout): all its spawns added
         private IPublicEvent openDoorsFor;
-        // at least this long after the mission starts: the outcome line and the mission's story communicator (shown 10 s)
-        // play behind the closed door; with the spawns loading at once, 1 s opened it far too early
-        private static readonly TimeSpan MinDoorOpenDelay = TimeSpan.FromSeconds(10);
+        // at least this long after the mission appears (and once its spawns are all on the map), 3 s
+        private static readonly TimeSpan MinDoorOpenDelay = TimeSpan.FromSeconds(3);
         private double openDoorsWait;
         private uint regroupObjective;
         private uint hideoutPhase;
