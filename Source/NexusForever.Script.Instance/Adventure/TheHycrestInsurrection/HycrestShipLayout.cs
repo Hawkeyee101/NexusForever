@@ -35,9 +35,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public static readonly TimeSpan TurnDuration = TimeSpan.FromSeconds(5);
 
         // the turn starts this long (ms) before the ship reaches the hover point, and it banks (rolls) this much (radians,
-        // about 10 degrees) halfway through; the roll direction is a guess, flip the sign if it leans out of the turn
+        // about 10 degrees) halfway through; negative leans into the right turn (+0.17 leaned left, 28 Sep 2026)
         public const uint TurnLead = 1500u;
-        public const float TurnBank = 0.17f;
+        public const float TurnBank = -0.17f;
 
         /// <summary>
         /// Departure ("jump away", State2): the ship moves forward and up. ASSUMPTION: the cockpit is at the ship's -Z end,
