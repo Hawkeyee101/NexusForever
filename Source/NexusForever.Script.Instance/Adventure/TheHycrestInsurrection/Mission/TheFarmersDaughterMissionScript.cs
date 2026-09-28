@@ -49,15 +49,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint PremaThanks         = 447119u; // "Oh, thank you so much!..."
         private const uint AyitaMissionPayoff  = 444044u; // communicator: "Prema's home safe and sound..."
 
-        // map markers and highlighted regions (WorldLocation2, WorldSocket): the objectives have none in the tables, these
-        // are the table points next to Tarquim and Millithea (layout A) in the sockets around them; Prema's is the nearest
-        // point (about 20 m), outside any socket
-        private const uint TarquimLocation   = 13041u;
-        private const uint TarquimSocket     = 1439u;
-        private const uint MillitheaLocation = 39383u;
-        private const uint MillitheaSocket   = 1414u;
-        private const uint PremaLocation     = 40050u;
-
         // captives call out when a player comes this close
         private const float CaptiveCallRange = 20f;
 
@@ -162,10 +153,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         {
             base.OnLoad(owner);
 
-            publicEvent.SetObjectiveLocations(SpeakWithTarquim, TarquimLocation);
-            publicEvent.SetObjectiveMapRegions(SpeakWithTarquim, (TarquimSocket, TarquimLocation));
-            publicEvent.SetObjectiveLocations(RescueCaptives, MillitheaLocation);
-            publicEvent.SetObjectiveMapRegions(RescueCaptives, (MillitheaSocket, MillitheaLocation));
+            // no map markers or regions yet: sending them in the objective packet (layout from #501, never used with
+            // data) left the client without the mission in the tracker (HYCREST.md, round 2 follow-up)
 
             alarm = new HycrestAlarm(log, publicEvent, mapInstance, creatureInfoManager, spellParametersFactory,
                 globalQuestManager, dialogue);
@@ -447,8 +436,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
                 // one captive at a time: Prema and her guard appear now
                 publicEvent.SetPhase(PremaPhase);
-                publicEvent.SetObjectiveLocations(RescueCaptives, PremaLocation);
-                publicEvent.SetObjectiveMapRegions(RescueCaptives, (0u, PremaLocation));
             }
             else if (entity.Guid == premaGuid && premaFree && !premaThanked)
             {
