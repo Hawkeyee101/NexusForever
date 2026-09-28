@@ -524,6 +524,24 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
+        /// Set the WorldLocation2 points shown as markers for an objective.
+        /// </summary>
+        public void SetObjectiveLocations(uint objectiveId, params uint[] worldLocation2Ids)
+        {
+            foreach (IPublicEventObjective objective in GetObjectives(objectiveId))
+                objective.SetLocations(worldLocation2Ids);
+        }
+
+        /// <summary>
+        /// Set the regions highlighted on the map for an objective.
+        /// </summary>
+        public void SetObjectiveMapRegions(uint objectiveId, params (uint WorldSocketId, uint WorldLocation2Id)[] regions)
+        {
+            foreach (IPublicEventObjective objective in GetObjectives(objectiveId))
+                objective.SetMapRegions(regions);
+        }
+
+        /// <summary>
         /// Add a unit that has to be killed for an active Exterminate objective, <paramref name="force"/> skips the checks
         /// that decide which units count on their own (hostile, in the objective's location or target group).
         /// </summary>

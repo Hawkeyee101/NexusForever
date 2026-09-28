@@ -107,6 +107,55 @@ namespace NexusForever.WorldServer.Command.Handler
             context.SendMessage($"Updated objective {objectiveId} of public event {eventId}.");
         }
 
+        [Command(Permission.MapUnload, "Show a WorldLocation2 marker for an objective of a public event on the current map (0 clears).", "eventlocation")]
+        public void HandleMapEventLocation(ICommandContext context,
+            [Parameter("Public event id.")]
+            uint eventId,
+            [Parameter("Objective id.")]
+            uint objectiveId,
+            [Parameter("WorldLocation2 id, 0 clears.")]
+            uint worldLocation2Id)
+        {
+            IPublicEvent publicEvent = GetRunningEvent(context, eventId);
+            if (publicEvent == null)
+                return;
+
+            publicEvent.SetObjectiveLocations(objectiveId, worldLocation2Id == 0u ? [] : [worldLocation2Id]);
+            context.SendMessage($"Set location {worldLocation2Id} on objective {objectiveId} of public event {eventId}.");
+        }
+
+        [Command(Permission.MapUnload, "Highlight a map region for an objective of a public event on the current map (0 0 clears).", "eventregion")]
+        public void HandleMapEventRegion(ICommandContext context,
+            [Parameter("Public event id.")]
+            uint eventId,
+            [Parameter("Objective id.")]
+            uint objectiveId,
+            [Parameter("WorldSocket id.")]
+            uint worldSocketId,
+            [Parameter("WorldLocation2 id.")]
+            uint worldLocation2Id)
+        {
+            IPublicEvent publicEvent = GetRunningEvent(context, eventId);
+            if (publicEvent == null)
+                return;
+
+            publicEvent.SetObjectiveMapRegions(objectiveId, worldSocketId == 0u && worldLocation2Id == 0u ? [] : [(worldSocketId, worldLocation2Id)]);
+            context.SendMessage($"Set region (socket {worldSocketId}, location {worldLocation2Id}) on objective {objectiveId} of public event {eventId}.");
+        }
+
+        private static IPublicEvent GetRunningEvent(ICommandContext context, uint eventId)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            IPublicEvent publicEvent = player.Map.PublicEventManager.GetEvent(eventId);
+            if (publicEvent == null || publicEvent.HasFinished)
+            {
+                context.SendError($"Public event {eventId} isn't running on this map!");
+                return null;
+            }
+
+            return publicEvent;
+        }
+
         [Command(Permission.MapPlayerRemove, "Remove player from current map instance.", "remove")]
         public void HandleMapPlayerRemove(ICommandContext context,
             [Parameter("Removal reason.", converter: typeof(EnumParameterConverter<WorldRemovalReason>))]

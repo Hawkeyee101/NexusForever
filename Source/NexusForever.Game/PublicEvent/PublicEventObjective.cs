@@ -31,6 +31,11 @@ namespace NexusForever.Game.PublicEvent
         // targets so far (units the event spawns while the objective is active are added, e.g. waves)
         private readonly HashSet<uint> targets = [];
 
+        // shown on the map and zone map: markers at WorldLocation2 points and highlighted regions (world socket and
+        // WorldLocation2), the tables don't have them for most objectives so scripts supply them
+        private readonly List<uint> locations = [];
+        private readonly List<(uint WorldSocketId, uint WorldLocation2Id)> mapRegions = [];
+
         // most Exterminate locations have a radius of a few metres, the fight around them is larger
         private const float ExterminateMinRadius = 40f;
 
@@ -224,6 +229,30 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
+        /// Set the WorldLocation2 points shown as markers for the objective.
+        /// </summary>
+        public void SetLocations(IEnumerable<uint> worldLocation2Ids)
+        {
+            locations.Clear();
+            locations.AddRange(worldLocation2Ids);
+
+            if (Status != PublicEventStatus.Inactive)
+                BroadcastObjectiveUpdate();
+        }
+
+        /// <summary>
+        /// Set the regions highlighted on the map for the objective.
+        /// </summary>
+        public void SetMapRegions(IEnumerable<(uint WorldSocketId, uint WorldLocation2Id)> regions)
+        {
+            mapRegions.Clear();
+            mapRegions.AddRange(regions);
+
+            if (Status != PublicEventStatus.Inactive)
+                BroadcastObjectiveUpdate();
+        }
+
+        /// <summary>
         /// Set the dynamic max of an active objective, for example when participants join or leave.
         /// </summary>
         /// <remarks>
@@ -358,7 +387,15 @@ namespace NexusForever.Game.PublicEvent
                 ObjectiveId      = Entry.Id,
                 ObjectiveStatus  = BuildObjectiveStatus(),
                 Busy             = IsBusy,
-                ElapsedTimeMs    = (uint)(elapsedTimer * 1000d)
+                ElapsedTimeMs    = (uint)(elapsedTimer * 1000d),
+                Locations        = [.. locations],
+                MapRegions       = mapRegions
+                    .Select(r => new Network.World.Message.Model.Shared.MapRegion
+                    {
+                        WorldSocketId    = r.WorldSocketId,
+                        WorldLocation2Id = r.WorldLocation2Id
+                    })
+                    .ToList()
             };
         }
 
