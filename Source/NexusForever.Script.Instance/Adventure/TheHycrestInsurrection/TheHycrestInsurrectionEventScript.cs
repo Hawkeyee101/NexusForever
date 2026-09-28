@@ -10,6 +10,7 @@ using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
+using NexusForever.Network.World.Message.Model;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter;
 
@@ -106,6 +107,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             [HycrestMissions.RegroupSinnatusBarn] = 11u
         };
         private readonly List<uint> barnDoors = [];
+
+        // barn doors: the state each should show, and which players have been sent it (a door's stand state in its
+        // create message didn't show, it spawned closed; the emote after it arrived does)
+        private readonly Dictionary<uint, StandState> barnDoorStates = [];
+        private readonly HashSet<(uint Door, uint Player)> barnDoorsShown = [];
+        private static readonly TimeSpan BarnDoorShowDelay = TimeSpan.FromSeconds(0.5);
+
+        // the doors open once the mission after a vote has everything on the map (any layout): all its spawns added
+        private IPublicEvent openDoorsFor;
+        private static readonly TimeSpan MinDoorOpenDelay = TimeSpan.FromSeconds(1);
+        private double openDoorsWait;
         private uint regroupObjective;
         private uint hideoutPhase;
 
@@ -161,6 +173,50 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // runs before the public event manager update, so actions here may create events (see OnVoteFinished)
             sceneClock += lastTick;
             sceneQueue.Update(lastTick);
+            UpdateBarnDoors(lastTick);
+        }
+
+        private void UpdateBarnDoors(double lastTick)
+        {
+            // show each door's state to players who can newly see it, a moment after it reached their client
+            foreach (IPlayer player in mapInstance.GetPlayers())
+            {
+                foreach (uint guid in barnDoors)
+                {
+                    if (barnDoorsShown.Contains((guid, player.Guid)) || player.GetVisible<IWorldEntity>(guid) == null)
+                        continue;
+
+                    barnDoorsShown.Add((guid, player.Guid));
+                    uint playerGuid = player.Guid;
+                    sceneQueue.Enqueue(BarnDoorShowDelay, () =>
+                    {
+                        if (mapInstance.GetEntity<IPlayer>(playerGuid) is not IPlayer viewer || !barnDoorStates.TryGetValue(guid, out StandState state))
+                            return;
+
+                        viewer.Session.EnqueueMessageEncrypted(new ServerEmote
+                        {
+                            Guid       = guid,
+                            StandState = state
+                        });
+                    });
+                }
+            }
+
+            // a player out of range forgets the door, it is shown again when they come back
+            barnDoorsShown.RemoveWhere(e => mapInstance.GetEntity<IPlayer>(e.Player)?.GetVisible<IWorldEntity>(e.Door) == null);
+
+            // open the doors once the new mission has all its spawns on the map, whichever layout it picked
+            if (openDoorsFor == null)
+                return;
+
+            openDoorsWait += lastTick;
+            if (openDoorsWait < MinDoorOpenDelay.TotalSeconds
+                || !openDoorsFor.HasFinished && openDoorsFor.GetEntities().Any(e => !e.InWorld))
+                return;
+
+            openDoorsFor = null;
+            SetBarnDoors(StandState.State1);
+            log.LogInformation("Hycrest: mission spawns loaded, barn doors open.");
         }
 
         /// <summary>
@@ -212,6 +268,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     // one per hideout barn (Abandoned Barn, Sinnatus's Barn): open while players arrive, closed for the
                     // briefing or regroup and the vote (retail video), open again when the mission starts
                     barnDoors.Add(worldEntity.Guid);
+                    barnDoorStates[worldEntity.Guid] = StandState.State1;
                     worldEntity.StandState = StandState.State1;
                     break;
                 case PublicEventCreature.AyitaSinnatus:
@@ -393,7 +450,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             tier = missionTier;
             tracks[missionTier] = track;
 
-            SetBarnDoors(StandState.State1);
+            // the barn doors open once the mission's spawns are all on the map, see UpdateBarnDoors
+            openDoorsFor  = mission;
+            openDoorsWait = 0d;
 
             foreach (IPlayer player in mapInstance.GetPlayers())
                 HycrestPublicEvent.JoinPublicTeam(mission, player);
@@ -503,6 +562,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 if (door == null || near.HasValue && Vector3.Distance(door.Position, near.Value) > BarnDoorRange)
                     continue;
 
+                barnDoorStates[guid] = state;
                 HycrestDropShip.SetState(door, state);
             }
         }

@@ -45,9 +45,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // (189 starts right after the briefing, so leaving "when 189 starts" would push everyone off at once)
         private static readonly TimeSpan ShipDepartDeadline = TimeSpan.FromSeconds(30);
 
-        // the ship waits this long after the last player left it: leaving right away pulled a player who had just
-        // jumped off along with the platform
-        private static readonly TimeSpan ShipDepartAfterEveryoneOff = TimeSpan.FromSeconds(3);
+        // the ship waits until everyone has landed, and a moment more: leaving while a player was still in the air
+        // pulled them along with the platform (also with 3 s after they jumped off)
+        private static readonly TimeSpan ShipDepartAfterEveryoneOff = TimeSpan.FromSeconds(1);
 
         // arriving players are put on the ship's deck shortly after entering the map
         private static readonly TimeSpan BoardDelay = TimeSpan.FromSeconds(0.5);
@@ -405,7 +405,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             shipDepartTimer?.Update(lastTick);
 
-            everyoneOffTime = dropShip.EveryoneOff() ? everyoneOffTime + lastTick : 0d;
+            everyoneOffTime = dropShip.EveryoneLanded() ? everyoneOffTime + lastTick : 0d;
             if (everyoneOffTime >= ShipDepartAfterEveryoneOff.TotalSeconds || shipDepartTimer?.HasElapsed == true)
                 dropShip.Depart();
         }

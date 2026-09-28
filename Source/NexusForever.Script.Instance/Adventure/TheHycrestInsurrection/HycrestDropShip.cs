@@ -328,6 +328,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
+        /// Return true if every player has left the ship and is on the ground.
+        /// </summary>
+        public bool EveryoneLanded()
+        {
+            return map.GetPlayers().All(p => !players.TryGetValue(p.CharacterId, out PlayerDrop drop) || drop.State == DropState.Landed);
+        }
+
+        /// <summary>
         /// Invoked each tick: detect players leaving the ship, keep Rocket Fall on them until they land.
         /// </summary>
         public void Update(double lastTick)
