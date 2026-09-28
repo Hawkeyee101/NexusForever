@@ -270,7 +270,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 {
                     // the argument during a vote stops once the vote is over (solo, it ends as soon as you vote)
                     if (!whileVoting || voteInProgress)
-                        dialogue.Say(GetNpc(speaker), textId, gestures || UsesGesture(speaker));
+                        dialogue.Say(GetNpc(speaker), textId, gestures && speaker != PublicEventCreature.AyitaSinnatus || UsesGesture(speaker));
                 });
                 TimeSpan duration = GetLineDuration(textId) - shortening;
                 time += shortening > TimeSpan.Zero && duration < BarnMinLineGap ? BarnMinLineGap : duration;
@@ -555,7 +555,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
             }
 
-            // everyone gestures while talking here, Ayita too (retail video)
+            // everyone standing gestures while talking here; Ayita stays seated, without the gesture
             TimeSpan time = QueueLines(TimeSpan.Zero, scene.Lead, gestures: true);
             sceneQueue.Enqueue(time, () => StartVote(voteId));
             QueueLines(time, scene.DuringVote, whileVoting: true, gestures: true);
