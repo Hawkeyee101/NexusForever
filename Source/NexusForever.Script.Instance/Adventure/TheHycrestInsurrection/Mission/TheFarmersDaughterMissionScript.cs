@@ -106,8 +106,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private static readonly Vector3 PremaPosition = new(-2377.9238f, -929.3451f, -1641.9752f);
 
-        private static readonly TimeSpan TarquimPleaDelay = TimeSpan.FromSeconds(1.5);
-
         private static readonly TimeSpan MissionEndDelay = TimeSpan.FromSeconds(4);
 
         // patrolling scouts: spawn position (first node) and the route they walk back and forth
@@ -736,14 +734,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private void OnTarquimSpokenTo()
         {
-            // a moment after the talk: said in the same instant as the dialog window of the interaction, his line didn't
-            // show
-            actionQueue.Enqueue(TarquimPleaDelay, () =>
-            {
-                IWorldEntity tarquim = mapInstance.GetEntity<IWorldEntity>(tarquimGuid);
-                if (tarquim != null)
-                    dialogue.Say(tarquim, TarquimPlea, true);
-            });
+            IWorldEntity tarquim = mapInstance.GetEntity<IWorldEntity>(tarquimGuid);
+            if (tarquim != null)
+                dialogue.Say(tarquim, TarquimPlea, true);
 
             foreach (IPlayer player in mapInstance.GetPlayers())
                 storyBuilder.SendStoryCommunicator(AyitaHurry, AyitaSinnatus, player);
