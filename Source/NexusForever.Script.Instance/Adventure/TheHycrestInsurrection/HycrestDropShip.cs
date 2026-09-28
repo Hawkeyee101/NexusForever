@@ -27,6 +27,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             public DropState State;
             public Vector3 Spot;
+            public bool EnteredOnDeck;
             public bool Boarded;
             public double SinceLoaded;
             public double SinceBoarded;
@@ -96,6 +97,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public bool Arrived { get; private set; }
 
+        /// <summary>
+        /// The ship is flying in; players are only put on board while it stands still.
+        /// </summary>
+        public bool Moving => FlewIn && !Arrived;
+
         public bool DoorsOpen { get; private set; }
         public bool Departed { get; private set; }
 
@@ -148,6 +154,26 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 Spot    = spot,
                 SampleY = spot.Y
             };
+        }
+
+        /// <summary>
+        /// Reserve a spot on the deck for <paramref name="player"/> entering the map and return its position, so the player
+        /// enters the map standing on the ship; null if the ship has left or is moving.
+        /// </summary>
+        /// <remarks>
+        /// Invoked before the player (and, for the first player, the ship) is added to the map: the position comes from
+        /// where the ship stands, its start point before the fly-in and the hover point after it.
+        /// </remarks>
+        public Vector3? ReserveEntry(IPlayer player)
+        {
+            if (Departed || Moving || players.ContainsKey(player.CharacterId))
+                return null;
+
+            Board(player);
+            PlayerDrop drop = players[player.CharacterId];
+            drop.EnteredOnDeck = true;
+
+            return HycrestShipLayout.OnShip(drop.Spot, Arrived ? HycrestShipLayout.Origin : HycrestShipLayout.StartPoint);
         }
 
         /// <summary>
@@ -323,9 +349,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                         continue;
                     }
 
-                    if (!Arrived)
+                    if (drop.EnteredOnDeck)
                     {
-                        // loaded, waiting under the narration's black screen for the ship to arrive
+                        // entered the map standing on the deck, nothing to teleport
+                        drop.Boarded = true;
+                        SinceFirstBoard ??= 0d;
+                        PlayerLoaded?.Invoke(player);
+                        PlayerBoarded?.Invoke(player);
+                        continue;
+                    }
+
+                    if (Moving)
+                    {
+                        // loaded, waiting for the ship to stand still
                         if (drop.SinceLoaded == 0d)
                             PlayerLoaded?.Invoke(player);
                         drop.SinceLoaded = Math.Max(drop.SinceLoaded, BoardAfterLoad);

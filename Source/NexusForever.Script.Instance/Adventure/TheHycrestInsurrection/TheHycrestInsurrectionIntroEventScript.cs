@@ -23,7 +23,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// Intro: report to Vice-Marshal Dawson, listen to the briefing, meet Vesna Taranoft at the Abandoned Barn.
     /// </summary>
     [ScriptFilterOwnerId(HycrestPublicEvent.Intro)]
-    public class TheHycrestInsurrectionIntroEventScript : IPublicEventScript, IOwnedScript<IPublicEvent>
+    public class TheHycrestInsurrectionIntroEventScript : IPublicEventScript, IOwnedScript<IPublicEvent>, IHycrestArrivalScript
     {
         // objective 189 is a ParticipantsInTriggerVolume objective with object id 1994 at WorldLocation2 13091 (radius 1)
         private const uint BarnTriggerId = 114902u;
@@ -50,11 +50,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // cinematic, a boarding teleport under the black screen left them dropping onto the deck as it ended (27 Sep 2026)
         private static readonly TimeSpan ArrivalAfterBoard = TimeSpan.FromSeconds(0.5);
 
-        // arrival, timed from the moment a player stands on the deck: a black screen (the arrival cinematic, 20 s); then the green "synchronisation" glow, the Caretaker's
-        // narration as portrait pop-ups (10 s each) while the hologram talks, then Dawson comes out of the door where the hologram was
+        // arrival, timed from the moment a player stands on the deck (players enter the map on the parked ship): a black
+        // screen (the arrival cinematic, 20 s); then the green "synchronisation" glow on the players and the ship, the ship
+        // flies to its hover point with everyone on board, the Caretaker's lines as portrait pop-ups (10 s each) while the
+        // hologram talks, then Dawson comes out of the door where the hologram was (once the ship has arrived)
         private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(20);
         private static readonly TimeSpan SyncDelay          = BlackScreen;
-        private static readonly TimeSpan Message1Delay      = BlackScreen + TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan IntroLineDelay     = BlackScreen + TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan DawsonArrivalWait  = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan Message1Delay      = IntroLineDelay + TimeSpan.FromSeconds(10);
         private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(10);
         private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(10);
         private const uint DawsonPhase = 1u;
@@ -63,6 +67,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint CaretakerMessage1          = 534606u;
         private const uint CaretakerMessage2          = 534607u;
         private const uint CaretakerMessageDurationMs = 10000u;
+
+        // Caretaker voice lines (AdventureVO_General_Caretaker, used by every adventure). Retail on arrival: "Do not think that
+        // you are impervious to harm, simply because this is a simulation." (text 745370, Intro_02). The line heard with the
+        // first narration message ("...good luck, you're going to need it") has no text in the tables; Intro_04 (the only
+        // intro without a text) is a guess, to confirm by ear
+        private const uint CaretakerIntroLine     = 745370u;
+        private const uint CaretakerIntroSound    = 48289u; // Play_AdventureVO_General_Caretaker_Intro_02
+        private const uint CaretakerMessage1Sound = 48291u; // Play_AdventureVO_General_Caretaker_Intro_04 (guess)
 
         // the two Caretaker messages are the portrait pop-ups (the story communicator's default window type). Window types 2
         // and 3 are retail's centred, typed-in story text on black; a cinematic hides story text, so they can only be used
@@ -90,6 +102,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private uint dawsonGuid;
         private uint hologramGuid;
         private bool dawsonAppearQueued;
+        private bool flyInQueued;
 
         #region Dependency Injection
 
@@ -173,12 +186,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     dropShip.ShipGuid = worldEntity.Guid;
                     break;
                 case PublicEventCreature.DominionDropship:
-                    // hovering, engines running; moved from its start point to the hover point before anyone is on board
-                    // (the doors and the hologram, spawned in the same batch, are registered by then). Placed there at once:
-                    // the fly-in (FlyIn) would happen before the players have loaded, so nobody would see it
+                    // hovering at its start point, engines running; players enter on its deck and it flies to the hover point
+                    // with them on board after the black screen (spawned as SimpleCollidable so players stay on it)
                     dropShip.ShipGuid = worldEntity.Guid;
                     HycrestDropShip.SetState(worldEntity, StandState.State1);
-                    actionQueue.Enqueue(TimeSpan.FromSeconds(0.5), dropShip.PlaceAtHover);
                     break;
                 case PublicEventCreature.DropshipDoorRight:
                     dropShip.RightDoorGuid = worldEntity.Guid;
@@ -280,14 +291,46 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
             actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
-            actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1)));
+            actionQueue.Enqueue(IntroLineDelay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerIntroLine, CaretakerIntroSound)));
+            actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1, CaretakerMessage1Sound)));
             actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage2)));
+
+            if (!flyInQueued)
+            {
+                flyInQueued = true;
+                actionQueue.Enqueue(SyncDelay, StartShipSync);
+                actionQueue.Enqueue(SyncDelay, dropShip.FlyIn);
+            }
 
             if (dawsonAppearQueued)
                 return;
 
             dawsonAppearQueued = true;
             actionQueue.Enqueue(DawsonAppearDelay, ShowDawson);
+        }
+
+        /// <summary>
+        /// Return the position on the ship's deck <paramref name="player"/> enters the map at, null for the default entrance.
+        /// </summary>
+        public Vector3? GetEntryPosition(IPlayer player)
+        {
+            return dropShip?.ReserveEntry(player);
+        }
+
+        private void StartShipSync()
+        {
+            // retail: the whole ship glows green as everyone synchronises; the ship is a unit (SimpleCollidable), so it can
+            // cast the sync spell on itself
+            if (mapInstance.GetEntity<IWorldEntity>(dropShip.ShipGuid) is not IUnitEntity ship)
+                return;
+
+            ISpellParameters parameters = spellParametersFactory.Resolve();
+            parameters.PrimaryTargetId        = ship.Guid;
+            parameters.UserInitiatedSpellCast = false;
+            ship.CastSpell(SyncSpell, parameters);
+
+            uint shipGuid = ship.Guid;
+            actionQueue.Enqueue(SyncDuration, () => mapInstance.GetEntity<IUnitEntity>(shipGuid)?.GetSpellBySpellId(SyncSpell)?.Finish());
         }
 
         private void WithPlayer(uint guid, Action<IPlayer> action)
@@ -306,9 +349,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             player.CastSpell(SyncSpell, parameters);
         }
 
-        private void PlayNarration(IPlayer player, uint textId)
+        private void PlayNarration(IPlayer player, uint textId, uint soundEventId = 0u)
         {
-            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs);
+            storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs,
+                soundEventId: soundEventId);
             PlayHologramTalk();
         }
 
@@ -327,6 +371,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void ShowDawson()
         {
+            // Dawson's spawn is at the hover point, wait for the ship
+            if (dropShip.Moving)
+            {
+                actionQueue.Enqueue(DawsonArrivalWait, ShowDawson);
+                return;
+            }
+
             // the hologram makes way and Dawson (phase 1 spawn) appears in its place
             mapInstance.GetEntity<IWorldEntity>(hologramGuid)?.RemoveFromMap();
             hologramGuid = 0u;

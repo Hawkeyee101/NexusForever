@@ -1,20 +1,23 @@
+using System.Numerics;
 using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Map;
 using NexusForever.Game.Abstract.PublicEvent;
 using NexusForever.Game.Abstract.Spell;
+using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter;
 using NexusForever.Shared;
 
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
     [ScriptFilterOwnerId(1149)]
-    public class TheHycrestInsurrectionMapScript : EventBaseContentMapScript, IUpdate
+    public class TheHycrestInsurrectionMapScript : EventBaseContentMapScript, IUpdate, IMapScript
     {
         public override uint PublicEventId => HycrestPublicEvent.Main;
 
-        // arrival: the intro event script shows a black screen (arrival cinematic) while the ship flies in and players are
-        // put on board, then the Caretaker's narration as centred story text (a cinematic hides story text, see
-        // HYCREST.md). A proper arrival cinematic (camera in the ship) is a later option.
+        // arrival: players enter the map standing on the parked drop ship (OnPlayerEntering), the intro event script shows a
+        // black screen (arrival cinematic), then the ship flies in with them on board while the Caretaker speaks. A proper
+        // arrival cinematic (camera in the ship) is a later option.
 
         private const uint NighttimeSkyboxSpell = 27236u;
 
@@ -52,6 +55,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             if (arrivedCharacters.Add(player.CharacterId))
                 StartArrival(player);
+        }
+
+        /// <summary>
+        /// Invoked before <see cref="IPlayer"/> is added to the map: arriving players enter standing on the drop ship.
+        /// </summary>
+        public void OnPlayerEntering(IPlayer player, IMapPosition mapPosition)
+        {
+            Vector3? position = null;
+            map.PublicEventManager.GetEvent(HycrestPublicEvent.Intro)?
+                .InvokeScriptCollection<IHycrestArrivalScript>(s => position ??= s.GetEntryPosition(player));
+
+            if (position.HasValue)
+                mapPosition.Position = position.Value;
         }
 
         private void StartArrival(IPlayer player)

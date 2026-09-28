@@ -1,10 +1,12 @@
 using System.Text.RegularExpressions;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Static.Chat;
 using NexusForever.Game.Static.Entity;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Entity;
 using NexusForever.Network.World.Message.Model;
+using NexusForever.Network.World.Message.Model.Chat;
 
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
@@ -12,10 +14,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// Plays scripted NPC lines from en-US.bin as NPC say (speech bubble and chat).
     /// </summary>
     /// <remarks>
-    /// There is no chat message that carries a text id, so lines are resolved to English text on the server.
+    /// Lines are sent as text ids (ServerChatNPC), so the client shows them in the player's language and plays their voice.
     /// </remarks>
     public partial class HycrestDialogue
     {
+
         // talking gesture for lines with $(self.visual=5701) in en-US.bin (visual 5701 plays Default_Talk, 278). Cinematic
         // visual effects only show during a cinematic, so the gesture is an emote: 75, an NPC-only Default_Talk emote
         // with stand state Emote (the player "talk" emote 238, stand state Stand, didn't show on the hologram)
@@ -71,7 +74,21 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             string raw = gameTableManager.TextEnglish.GetEntry(textId) ?? string.Empty;
-            speaker.NpcSay(GetText(textId));
+
+            // the text id (not resolved text) lets the client play the line's own $(self.visual=...) voice and the
+            // speaker's voice; the channel's chat id is the speaking unit (to confirm in game)
+            var message = new ServerChatNPC
+            {
+                Channel = new Channel
+                {
+                    ChatChannelId = ChatChannelType.NPCSay,
+                    ChatId        = speaker.Guid
+                },
+                UnitNameLocalizedTextId = gameTableManager.Creature2.GetEntry(speaker.CreatureId)?.LocalizedTextIdName ?? 0u,
+                MessageLocalizedTextId  = textId
+            };
+
+            speaker.EnqueueToVisible(message);
 
             if (gesture ?? SelfVisualRegex().IsMatch(raw))
                 PlayTalk(speaker);

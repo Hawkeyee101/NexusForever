@@ -43,6 +43,19 @@ namespace NexusForever.WorldServer.Command.Handler
             context.SendMessage($"Played the Hycrest arrival black screen with flags {flags}, cancel mode {cancelMode ?? 0u}.");
         }
 
+        // local dev aid (not for upstream): identify voice lines (SoundEvent.tbl ids) by ear
+        [Command(Permission.StoryCommunicator, "Dev: play a sound event (e.g. a voice line) in a short communicator window.", "sound")]
+        public void HandleSound(ICommandContext context,
+            [Parameter("SoundEvent id to play.")]
+            uint soundEventId,
+            [Parameter("Optional creature id for the portrait (default: the Caretaker).")]
+            uint? creatureId)
+        {
+            StoryBuilder.Instance.SendStoryCommunicator(515639, creatureId ?? 53309u, context.GetTargetOrInvoker<IPlayer>(), 3000,
+                soundEventId: soundEventId);
+            context.SendMessage($"Played sound event {soundEventId}.");
+        }
+
         [Command(Permission.StoryPanel, "Send a story panel to a character.", "panel", "p")]
         public void HandleStoryPanel(ICommandContext context,
             [Parameter("Story panel entry to send to character.")]
