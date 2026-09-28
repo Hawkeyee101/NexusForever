@@ -80,6 +80,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         };
         private readonly List<uint> barnDoors = [];
         private uint regroupObjective;
+        private uint hideoutPhase;
 
         // a barn door belongs to the hideout whose regroup point is this close
         private const float BarnDoorRange = 40f;
@@ -420,9 +421,41 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             }
 
             regroupObjective = objectiveId;
-            if (HideoutPhases.TryGetValue(objectiveId, out uint phase))
-                publicEvent.SetPhase(phase);
+            MoveNpcsTo(objectiveId);
             regroup.InvokeScriptCollection<IHycrestRegroupScript>(s => s.StartRegroup(objectiveId, (uint)mapInstance.PlayerCount));
+        }
+
+        /// <summary>
+        /// Invoked by a mission once its outcome is clear: the story NPCs go ahead to the hideout of its regroup.
+        /// </summary>
+        public void PrepareHideout(uint missionId)
+        {
+            if (HycrestMissions.RegroupAfter.TryGetValue(missionId, out uint objectiveId))
+                MoveNpcsTo(objectiveId);
+        }
+
+        /// <summary>
+        /// The story NPCs leave the hideout they are at and appear at the one of <paramref name="regroupObjective"/>.
+        /// </summary>
+        /// <remarks>
+        /// Only hideouts with a phase in <see cref="HideoutPhases"/>; the barn doors stay (phase 0, not NPCs).
+        /// </remarks>
+        private void MoveNpcsTo(uint regroupObjective)
+        {
+            if (!HideoutPhases.TryGetValue(regroupObjective, out uint phase) || hideoutPhase == phase)
+                return;
+
+            hideoutPhase = phase;
+            foreach (uint guid in npcGuids.Values.SelectMany(g => g))
+            {
+                IWorldEntity npc = mapInstance.GetEntity<IWorldEntity>(guid);
+                if (npc is { InWorld: true })
+                    npc.RemoveFromMap();
+            }
+            npcGuids.Clear();
+
+            publicEvent.SetPhase(phase);
+            log.LogInformation($"Hycrest: story NPCs moved to the hideout of regroup objective {regroupObjective} (phase {phase}).");
         }
 
         /// <summary>

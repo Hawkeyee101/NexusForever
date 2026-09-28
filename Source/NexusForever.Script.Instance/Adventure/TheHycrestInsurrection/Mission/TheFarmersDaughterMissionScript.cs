@@ -653,6 +653,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
                 // one captive at a time: Prema and her guard appear now
                 publicEvent.SetPhase(PremaPhase);
+
+                // the rebels go ahead to Sinnatus's Barn for the regroup
+                mapInstance.PublicEventManager.GetEvent(HycrestPublicEvent.Main)?
+                    .InvokeScriptCollection<IHycrestMainEventScript>(s => s.PrepareHideout(publicEvent.Id));
             }
             else if (entity.Guid == premaGuid && premaFree && !premaThanked)
             {

@@ -16,6 +16,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// Invoked when the players have regrouped at the hideout.
         /// </summary>
         void OnRegroupComplete();
+
+        /// <summary>
+        /// Move the story NPCs to the hideout the players regroup at after <paramref name="missionId"/>, invoked by the
+        /// mission once its outcome is clear (e.g. The Farmer's Daughter when Millithea is freed).
+        /// </summary>
+        void PrepareHideout(uint missionId);
     }
 
     /// <summary>
