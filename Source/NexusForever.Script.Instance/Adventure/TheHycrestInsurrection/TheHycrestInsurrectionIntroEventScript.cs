@@ -48,7 +48,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         // the black screen starts once the player stands on the deck: the client doesn't move the player during a
         // cinematic, a boarding teleport under the black screen left them dropping onto the deck as it ended (27 Sep 2026)
-        private static readonly TimeSpan ArrivalAfterBoard = TimeSpan.Zero;
+        // started at the moment of loading (0 s), the player fell through the ship and saw no black screen (28 Sep 2026)
+        private static readonly TimeSpan ArrivalAfterBoard = TimeSpan.FromSeconds(0.5);
 
         // arrival, timed from the moment a player stands on the deck (players enter the map on the parked ship): a black
         // screen (the arrival cinematic, 20 s); then the green "synchronisation" glow on the players and the ship, the ship
