@@ -48,6 +48,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         }
 
         /// <summary>
+        /// Invoked when the mission enters a phase.
+        /// </summary>
+        public virtual void OnPublicEventPhase(uint phase)
+        {
+        }
+
+        /// <summary>
         /// Invoked when the status of an objective of the mission changes.
         /// </summary>
         public virtual void OnPublicEventObjectiveStatus(IPublicEventObjective objective)

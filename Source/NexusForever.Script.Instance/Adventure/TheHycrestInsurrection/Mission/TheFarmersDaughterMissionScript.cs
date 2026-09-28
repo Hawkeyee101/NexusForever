@@ -50,15 +50,25 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint PremaThanks         = 447119u; // "Oh, thank you so much!..."
         private const uint AyitaMissionPayoff  = 444044u; // communicator: "Prema's home safe and sound..."
 
-        private const uint TarquimLocation   = 13041u;
-        private const uint MillitheaLocation = 39383u;
-        private const uint PremaLocation     = 40050u;
+        private const uint TarquimLocation = 13041u;
+
+        /// <summary>
+        /// Where the captives are: retail places Millithea (with her drones) and Prema (with the Responsebot) at one of
+        /// two spots per run, everything else is shared. Each layout has its own phases (SQL) and map markers (the table
+        /// points next to them: Millithea 39383/39384 are consecutive ids at her two spots, retail's own points).
+        /// </summary>
+        private record Layout(string Name, uint MillitheaPhase, uint PremaPhase, uint MillitheaLocation, uint PremaLocation, Vector3 PremaPosition);
+
+        private static readonly Layout[] Layouts =
+        [
+            new("A", 10u, 20u, 39383u, 40050u, new Vector3(-2377.9238f, -929.3451f, -1641.9752f)),
+            new("B", 11u, 21u, 39384u, 38652u, new Vector3(-2273.572f, -925.9564f, -1674.7275f))
+        ];
+
+        private Layout layout;
 
         // captives call out when a player comes this close
         private const float CaptiveCallRange = 20f;
-
-        // Prema and the Responsebot spawn in this phase, once Millithea is freed
-        private const uint PremaPhase = 1u;
 
         private const float PatrolSpeed = 2f;
 
@@ -104,7 +114,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint AlarmLineMarkerDisplay = 23754u;
         private const float AlarmLineMarkerSpacing = 4f;
 
-        private static readonly Vector3 PremaPosition = new(-2377.9238f, -929.3451f, -1641.9752f);
 
         private static readonly TimeSpan MissionEndDelay = TimeSpan.FromSeconds(4);
 
@@ -191,10 +200,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         {
             base.OnLoad(owner);
 
+            // the layout: 50/50 per run (retail's deciding factor is unknown, the videos show both); the phase spawns
+            // Millithea and her drones
+            layout = Layouts[Random.Shared.Next(Layouts.Length)];
+            log.LogInformation($"Hycrest: The Farmer's Daughter, layout {layout.Name}.");
+            publicEvent.SetPhase(layout.MillitheaPhase);
+
             // map area and minimap marker: the objectives have no WorldLocation2 in the tables; these are the table points
-            // next to Tarquim and Millithea (layout A), Prema's is the nearest point (about 20 m)
+            // next to Tarquim and the captives
             publicEvent.SetObjectiveLocations(SpeakWithTarquim, TarquimLocation);
-            publicEvent.SetObjectiveLocations(RescueCaptives, MillitheaLocation);
+            publicEvent.SetObjectiveLocations(RescueCaptives, layout.MillitheaLocation);
 
             alarm = new HycrestAlarm(log, publicEvent, mapInstance, creatureInfoManager, spellParametersFactory,
                 globalQuestManager, dialogue);
@@ -518,7 +533,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 .ToList();
             Vector3 centre = party.Aggregate(Vector3.Zero, (sum, p) => sum + p.Position) / party.Count;
 
-            Vector3 direction = PremaPosition - centre;
+            Vector3 direction = layout.PremaPosition - centre;
             direction.Y = 0f;
             Vector3 position = direction.LengthSquared() > 0.01f
                 ? centre + Vector3.Normalize(direction) * AlarmSpawnDistance
@@ -738,6 +753,34 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         }
 
         /// <summary>
+        /// Invoked when the public event enters a phase.
+        /// </summary>
+        /// <remarks>
+        /// Dev: setting the other layout's Millithea phase (e.g. "map eventphase 420 11") switches the layout; best right
+        /// after the mission started, before Millithea is freed.
+        /// </remarks>
+        public override void OnPublicEventPhase(uint phase)
+        {
+            Layout requested = Layouts.FirstOrDefault(l => l.MillitheaPhase == phase);
+            if (layout == null || requested == null || requested == layout || millitheaFree)
+                return;
+
+            // the old layout's captives and guards go; the new phase's entities are only queued to be added yet
+            foreach (IGridEntity entity in publicEvent.GetEntities().ToList())
+                if (entity is IWorldEntity { InWorld: true } worldEntity
+                    && worldEntity.CreatureId is Millithea or PredatorDrone or Prema or Responsebot)
+                    worldEntity.RemoveFromMap();
+
+            millitheaGuards.Clear();
+            millitheaGuid   = 0u;
+            millitheaCalled = false;
+
+            layout = requested;
+            publicEvent.SetObjectiveLocations(RescueCaptives, layout.MillitheaLocation);
+            log.LogInformation($"Hycrest: The Farmer's Daughter, switched to layout {layout.Name}.");
+        }
+
+        /// <summary>
         /// Invoked when the status of an objective changes.
         /// </summary>
         public override void OnPublicEventObjectiveStatus(IPublicEventObjective objective)
@@ -792,8 +835,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 dialogue.Say(entity, MillitheaThanks, false);
 
                 // one captive at a time: Prema and her guard appear now, and the map points to her
-                publicEvent.SetPhase(PremaPhase);
-                publicEvent.SetObjectiveLocations(RescueCaptives, PremaLocation);
+                publicEvent.SetPhase(layout.PremaPhase);
+                publicEvent.SetObjectiveLocations(RescueCaptives, layout.PremaLocation);
 
                 // the rebels go ahead to Sinnatus's Barn for the regroup
                 mapInstance.PublicEventManager.GetEvent(HycrestPublicEvent.Main)?

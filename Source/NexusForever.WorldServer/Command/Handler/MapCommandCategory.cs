@@ -110,6 +110,21 @@ namespace NexusForever.WorldServer.Command.Handler
             context.SendMessage($"Updated objective {objectiveId} of public event {eventId}.");
         }
 
+        [Command(Permission.MapUnload, "Set the phase of a public event on the current map (spawns the phase's entities, scripts hear it).", "eventphase")]
+        public void HandleMapEventPhase(ICommandContext context,
+            [Parameter("Public event id.")]
+            uint eventId,
+            [Parameter("Phase.")]
+            uint phase)
+        {
+            IPublicEvent publicEvent = GetRunningEvent(context, eventId);
+            if (publicEvent == null)
+                return;
+
+            publicEvent.SetPhase(phase);
+            context.SendMessage($"Public event {eventId} set to phase {phase}.");
+        }
+
         [Command(Permission.MapUnload, "Show a WorldLocation2 marker for an objective of a public event on the current map (0 clears).", "eventlocation")]
         public void HandleMapEventLocation(ICommandContext context,
             [Parameter("Public event id.")]
