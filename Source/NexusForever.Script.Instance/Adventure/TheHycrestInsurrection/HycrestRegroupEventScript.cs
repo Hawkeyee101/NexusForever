@@ -15,9 +15,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// Regroup (public event 445): between missions the players gather at a hideout (objectives 1772-1776).
     /// </summary>
     /// <remarks>
-    /// Created once by the main event script and used for every regroup: finished sub-events can't be created again, so the
-    /// objective of the next hideout is activated (reset first if it was used before). The objectives are participants in a
-    /// trigger volume (the table's object id) at the objective's WorldLocation2 point, so they wait for the whole party.
+    /// Created by the main event script for each regroup and finished by it once everyone has arrived. The objectives are
+    /// participants in a trigger volume (the table's object id) at the objective's WorldLocation2 point, so they wait for
+    /// the whole party.
     /// </remarks>
     [ScriptFilterOwnerId(HycrestPublicEvent.Regroup)]
     public class HycrestRegroupEventScript : IPublicEventScript, IOwnedScript<IPublicEvent>, IHycrestRegroupScript
@@ -69,8 +69,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
             }
 
-            // the same hideout can be used twice in a run
-            publicEvent.ResetObjective(objectiveId);
             publicEvent.ActivateObjective(objectiveId, participants);
             activeObjective = objectiveId;
 

@@ -107,6 +107,19 @@ namespace NexusForever.Game.PublicEvent
             if (template.Entry.WorldId != map.Entry.Id)
                 throw new InvalidOperationException($"Public event {id} is not available in map {map.Entry.Id}!");
 
+            // an event that has finished (sub-events stay until the map unloads) makes way for a new one, so events can
+            // run again in the same map, e.g. one that repeats between the stages of an adventure
+            if (publicEvents.TryGetValue(id, out IPublicEvent existing))
+            {
+                if (!existing.HasFinished)
+                    throw new InvalidOperationException($"Public event {id} is already running in map {map.Entry.Id}!");
+
+                publicEvents.Remove(id);
+                existing.Dispose();
+
+                log.LogTrace($"Removed finished public event {id} for map {map.Entry.Id} to create it again.");
+            }
+
             IPublicEvent @event = publicEventFactory.CreateEvent(id);
             @event.Initialise(this, template, map);
 

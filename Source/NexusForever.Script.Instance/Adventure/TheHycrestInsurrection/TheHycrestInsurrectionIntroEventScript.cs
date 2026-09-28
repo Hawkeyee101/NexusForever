@@ -52,20 +52,20 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         // arrival, timed from the moment a player stands on the deck (players enter the map on the parked ship): a black
         // screen (the arrival cinematic, 3 s) under which the ship starts flying to its hover point with everyone on board;
-        // then the green "synchronisation" glow on the players, the Caretaker's lines as portrait pop-ups (10 s each) while
+        // then the green "synchronisation" glow on the players, the Caretaker's lines as portrait pop-ups (8 s each) while
         // the hologram talks, then Dawson comes out of the door where the hologram was (once the ship has arrived)
         private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(3); // HycrestInsurrectionOnEnter.BlackDuration
         private static readonly TimeSpan SyncDelay          = BlackScreen;
         private static readonly TimeSpan DawsonArrivalWait  = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan Message1Delay      = BlackScreen + TimeSpan.FromSeconds(1.5);
-        private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(10);
-        private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(8);
+        private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(7);
         private const uint DawsonPhase = 1u;
         private static readonly TimeSpan DawsonTalkFallback = TimeSpan.FromSeconds(60);
 
         private const uint CaretakerMessage1          = 534606u;
         private const uint CaretakerMessage2          = 534607u;
-        private const uint CaretakerMessageDurationMs = 10000u;
+        private const uint CaretakerMessageDurationMs = 8000u;
 
         // the two Caretaker messages are the portrait pop-ups (the story communicator's default window type). Window types 2
         // and 3 are retail's centred, typed-in story text on black; a cinematic hides story text, so they can only be used

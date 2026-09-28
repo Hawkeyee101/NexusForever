@@ -50,12 +50,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         ];
 
         // speech pacing: at least MinLineSeconds per line, longer lines get more time
-        private const double MinLineSeconds = 4d;
-        private const double CharactersPerSecond = 14d;
+        private const double MinLineSeconds = 3d;
+        private const double CharactersPerSecond = 20d;
 
         private const uint CommunicatorDurationMs = 10000u;
-        private static readonly TimeSpan OutcomeCommunicatorDelay = TimeSpan.FromSeconds(3);
-        private static readonly TimeSpan OutcomeMissionDelay = TimeSpan.FromSeconds(6);
+        private static readonly TimeSpan OutcomeCommunicatorDelay = TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan OutcomeMissionDelay = TimeSpan.FromSeconds(3);
         private static readonly TimeSpan NextMissionDelay = TimeSpan.FromSeconds(5);
 
         private IPublicEvent publicEvent;
@@ -301,10 +301,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void StartMission(uint missionId)
         {
-            // sub-events are never removed after they finish, a second CreateEvent for the same id would throw
-            if (publicEvent.Map.PublicEventManager.GetEvent(missionId) != null)
+            // a finished mission can be created again, a running one can't
+            if (publicEvent.Map.PublicEventManager.GetEvent(missionId)?.HasFinished == false)
             {
-                log.LogInformation($"Hycrest: mission {missionId} already exists in this instance, start a new instance to play it again.");
+                log.LogInformation($"Hycrest: mission {missionId} is already running.");
                 return;
             }
 
@@ -366,7 +366,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void StartRegroup(uint objectiveId)
         {
-            if (regroup == null)
+            // each regroup is its own event: it finishes once everyone has arrived, which takes it off the tracker
+            if (regroup == null || regroup.HasFinished)
             {
                 regroup = publicEvent.Map.PublicEventManager.CreateEvent(HycrestPublicEvent.Regroup);
                 if (regroup == null)
@@ -384,7 +385,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void UpdateRegroupParticipants()
         {
-            regroup?.InvokeScriptCollection<IHycrestRegroupScript>(s => s.SetParticipants((uint)mapInstance.PlayerCount));
+            if (regroup?.HasFinished == false)
+                regroup.InvokeScriptCollection<IHycrestRegroupScript>(s => s.SetParticipants((uint)mapInstance.PlayerCount));
         }
 
         /// <summary>
@@ -397,6 +399,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void NextTier()
         {
+            regroup?.Finish(PublicEventTeam.PublicTeam);
+            regroup = null;
+
             int nextTier = tier + 1;
             log.LogInformation($"Hycrest: regrouped, tier {nextTier + 1} next.");
 
