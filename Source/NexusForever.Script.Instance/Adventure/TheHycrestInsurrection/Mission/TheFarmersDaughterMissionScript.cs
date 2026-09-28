@@ -50,14 +50,22 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         // captives call out when a player comes this close
         private const float CaptiveCallRange = 20f;
 
+        // Prema and the Responsebot spawn in this phase, once Millithea is freed
+        private const uint PremaPhase = 1u;
+
         private const float PatrolSpeed = 2f;
 
         // spotlight targets (Automated Machine Gun - Spotlight Target): they move slowly along a lane and the machine gun
-        // fires at a player caught in them (Automated Machine Gun Fire - Hycrest Adventure - Spotlights)
+        // opens fire when a player walks into one. Retail: 46970 (Automated Machine Gun Fire, 6 m range, 5.5 s cooldown)
+        // pulses its damage proxy 46971 (10 m red telegraph, 3% health) for 5 s. The engine drops the proxy ticks (the
+        // multiphase spell finishes right away), so the script casts the proxy itself, once per channel pulse.
         private const float SpotlightSpeed = 1.5f;
-        private const float SpotlightRange = 4f;
+        private const float SpotlightRange = 6f;
         private const uint SpotlightFireSpell = 46970u;
-        private static readonly TimeSpan SpotlightFireInterval = TimeSpan.FromSeconds(1.5);
+        private const uint SpotlightDamageSpell = 46971u;
+        private static readonly TimeSpan SpotlightFireDuration = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan SpotlightPulseInterval = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan SpotlightCooldown = TimeSpan.FromSeconds(5.5);
 
         private static readonly TimeSpan MissionEndDelay = TimeSpan.FromSeconds(4);
 
@@ -82,7 +90,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private uint premaGuid;
         private uint responsebotGuid;
         private readonly HashSet<uint> millitheaGuards = [];
-        private readonly Dictionary<uint, double> spotlightCooldowns = [];
+        private readonly Dictionary<uint, Spotlight> spotlights = [];
 
         private bool millitheaCalled;
         private bool millitheaFree;
@@ -149,7 +157,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                     StartRoute(worldEntity, Patrols, PatrolSpeed);
                     break;
                 case SpotlightTarget:
-                    spotlightCooldowns[worldEntity.Guid] = 0d;
+                    spotlights[worldEntity.Guid] = new Spotlight();
                     StartRoute(worldEntity, SpotlightLanes, SpotlightSpeed);
                     break;
             }
@@ -199,7 +207,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 dialogue.Say(millithea, MillitheaAfraid, false);
             }
 
-            if (millitheaFree || millitheaGuards.Any(IsAlive))
+            // the guards can be added to the map a tick after her
+            if (millitheaFree || millitheaGuards.Count == 0 || millitheaGuards.Any(IsAlive))
                 return;
 
             millitheaFree = true;
@@ -219,7 +228,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 dialogue.Say(prema, PremaStopThis, false);
             }
 
-            if (premaFree || IsAlive(responsebotGuid))
+            if (premaFree || responsebotGuid == 0u || IsAlive(responsebotGuid))
                 return;
 
             premaFree = true;
@@ -228,29 +237,53 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             log.LogInformation("Hycrest: the Responsebot is down, Prema can be freed.");
         }
 
+        private class Spotlight
+        {
+            public double Cooldown;
+            public double Firing;
+            public double NextPulse;
+        }
+
         private void UpdateSpotlights(double lastTick)
         {
-            foreach (uint guid in spotlightCooldowns.Keys.ToList())
+            foreach ((uint guid, Spotlight state) in spotlights)
             {
-                spotlightCooldowns[guid] -= lastTick;
-                if (spotlightCooldowns[guid] > 0d)
-                    continue;
-
                 if (mapInstance.GetEntity<IWorldEntity>(guid) is not IUnitEntity spotlight)
                     continue;
 
-                IPlayer caught = mapInstance.GetPlayers()
-                    .FirstOrDefault(p => p.IsAlive && Vector3.Distance(p.Position, spotlight.Position) <= SpotlightRange);
-                if (caught == null)
+                // the cooldown runs from the start of the burst, as the spell's own
+                state.Cooldown -= lastTick;
+                if (state.Firing > 0d)
+                {
+                    state.Firing    -= lastTick;
+                    state.NextPulse -= lastTick;
+                    if (state.NextPulse <= 0d)
+                    {
+                        state.NextPulse = SpotlightPulseInterval.TotalSeconds;
+                        CastSpotlightSpell(spotlight, SpotlightDamageSpell);
+                    }
+                    continue;
+                }
+
+                if (state.Cooldown > 0d)
                     continue;
 
-                spotlightCooldowns[guid] = SpotlightFireInterval.TotalSeconds;
+                if (!mapInstance.GetPlayers().Any(p => p.IsAlive && Vector3.Distance(p.Position, spotlight.Position) <= SpotlightRange))
+                    continue;
 
-                ISpellParameters parameters = spellParametersFactory.Resolve();
-                parameters.PrimaryTargetId        = caught.Guid;
-                parameters.UserInitiatedSpellCast = false;
-                spotlight.CastSpell(SpotlightFireSpell, parameters);
+                // the fire spell plays the machine gun, the pulses bring the telegraph and the damage
+                state.Cooldown  = SpotlightCooldown.TotalSeconds;
+                state.Firing    = SpotlightFireDuration.TotalSeconds;
+                state.NextPulse = 0d;
+                CastSpotlightSpell(spotlight, SpotlightFireSpell);
             }
+        }
+
+        private void CastSpotlightSpell(IUnitEntity spotlight, uint spell4Id)
+        {
+            ISpellParameters parameters = spellParametersFactory.Resolve();
+            parameters.UserInitiatedSpellCast = false;
+            spotlight.CastSpell(spell4Id, parameters);
         }
 
         private bool IsAlive(uint guid)
@@ -315,6 +348,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             {
                 millitheaThanked = true;
                 dialogue.Say(entity, MillitheaThanks, false);
+
+                // one captive at a time: Prema and her guard appear now
+                publicEvent.SetPhase(PremaPhase);
             }
             else if (entity.Guid == premaGuid && premaFree && !premaThanked)
             {
