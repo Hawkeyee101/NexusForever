@@ -134,16 +134,19 @@ namespace NexusForever.WorldServer.Command.Handler
             [Parameter("Operation: 0 AddToEvent, 1 RemoveFromEvent, 2 AddToObjective, 3 RemoveFromObjective.")]
             uint operation,
             [Parameter("WorldLocation2 id.")]
-            uint worldLocation2Id)
+            uint worldLocation2Id,
+            [Parameter("Optional width of the id in bits (default 14, try 15 or 32).")]
+            uint? bits)
         {
             IPlayer player = context.GetTargetOrInvoker<IPlayer>();
             player.Session.EnqueueMessageEncrypted(new ServerPublicEventLocationUpdate
             {
                 ObjectId         = objectId,
                 Operation        = (PublicEventOperationType)operation,
-                WorldLocation2Id = worldLocation2Id
+                WorldLocation2Id = worldLocation2Id,
+                ObjectIdBits     = bits ?? 14u
             });
-            context.SendMessage($"Sent location update: {(PublicEventOperationType)operation} {objectId}, location {worldLocation2Id}.");
+            context.SendMessage($"Sent location update: {(PublicEventOperationType)operation} {objectId}, location {worldLocation2Id}, id {bits ?? 14u} bits.");
         }
 
         [Command(Permission.MapUnload, "Dev: show or hide a map hex group (MapZoneHexGroup) on your map, e.g. the Hycrest groups 10-20.", "hexgroup")]

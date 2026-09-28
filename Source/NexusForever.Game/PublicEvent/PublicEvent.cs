@@ -208,7 +208,7 @@ namespace NexusForever.Game.PublicEvent
 
             SendServerPublicEventStart(player, publicEventTeam);
             foreach (IPublicEventObjective objective in publicEventTeam.GetObjectives())
-                objective.SendLocations(player);
+                objective.SendMarkers(player);
 
             if (template.HasLiveStats())
                 SendServerPublicEventStatsUpdate();
@@ -573,8 +573,16 @@ namespace NexusForever.Game.PublicEvent
         /// </summary>
         public void OnEntityAddedToMap(IGridEntity entity)
         {
+            if (!entityFactory.Contains(entity))
+                return;
+
+            // the event's NPCs that are targets of an active objective are shown as such (e.g. a Talk To NPC)
+            if (entity is IWorldEntity worldEntity)
+                foreach (IPublicEventObjective objective in GetAllObjectives())
+                    objective.MarkUnit(worldEntity);
+
             // units the event spawns while an Exterminate objective is active count for it too (e.g. waves)
-            if (entity is not IUnitEntity unit || !entityFactory.Contains(entity))
+            if (entity is not IUnitEntity unit)
                 return;
 
             foreach (IPublicEventObjective objective in GetAllObjectives())
@@ -587,7 +595,10 @@ namespace NexusForever.Game.PublicEvent
         public void OnEntityRemovedFromMap(IGridEntity entity)
         {
             foreach (IPublicEventObjective objective in GetAllObjectives())
+            {
                 objective.OnTargetRemoved(entity.Guid, false);
+                objective.UnmarkUnit(entity.Guid);
+            }
         }
 
         /// <summary>

@@ -10,9 +10,12 @@ namespace NexusForever.Network.World.Message.Model.PublicEvent
         public PublicEventOperationType Operation { get; set; }
         public uint WorldLocation2Id { get; set; }
 
+        // dev: the id's width isn't confirmed (14 bits here, the related unit and map region updates use 32)
+        public uint ObjectIdBits { get; set; } = 14u;
+
         public void Write(GamePacketWriter writer)
         {
-            writer.Write(ObjectId, 14u);
+            writer.Write(ObjectId, ObjectIdBits);
             writer.Write(Operation, 3u);
             writer.Write(WorldLocation2Id, 17u);
         }

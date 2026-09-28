@@ -37,6 +37,18 @@ namespace NexusForever.Game.PublicEvent
         // objective message's Locations/MapRegions left the client without the event in its tracker)
         private readonly List<uint> locations = [];
 
+        // units the client shows as the objective's targets (the objective marker on the unit and the minimap, like
+        // retail's Talk To NPCs), sent with ServerPublicEventUnitUpdate while the objective is active: the event's units
+        // whose creature is in the objective's creature target group
+        private readonly HashSet<uint> markedUnits = [];
+
+        private bool MarksUnits => Entry.PublicEventObjectiveTypeEnum
+            is PublicEventObjectiveType.TalkTo
+            or PublicEventObjectiveType.TalkToChecklist
+            or PublicEventObjectiveType.ActivateTargetGroup
+            or PublicEventObjectiveType.ActivateTargetGroupChecklist
+            or PublicEventObjectiveType.KillTargetGroup;
+
         // most Exterminate locations have a radius of a few metres, the fight around them is larger
         private const float ExterminateMinRadius = 40f;
 
@@ -121,11 +133,16 @@ namespace NexusForever.Game.PublicEvent
             else
                 BroadcastObjectiveStatusUpdate();
 
-            // the map locations show while the objective is active
+            // the map locations and target units show while the objective is active
             foreach (uint id in locations)
                 BroadcastLocation(status == PublicEventStatus.Active
                     ? PublicEventOperationType.AddToObjective
                     : PublicEventOperationType.RemoveFromObjective, id);
+
+            if (status == PublicEventStatus.Active)
+                MarkUnits();
+            else
+                UnmarkUnits();
 
             Team.PublicEvent.InvokeScriptCollection<IPublicEventScript>(s => s.OnPublicEventObjectiveStatus(this));
         }
@@ -254,15 +271,67 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
-        /// Send the objective's map locations to <see cref="IPlayer"/>, e.g. after joining the event.
+        /// Send the objective's map locations and target units to <see cref="IPlayer"/>, e.g. after joining the event.
         /// </summary>
-        public void SendLocations(IPlayer player)
+        public void SendMarkers(IPlayer player)
         {
             if (Status != PublicEventStatus.Active)
                 return;
 
             foreach (uint id in locations)
                 player.Session.EnqueueMessageEncrypted(BuildLocationUpdate(PublicEventOperationType.AddToObjective, id));
+            foreach (uint guid in markedUnits)
+                player.Session.EnqueueMessageEncrypted(BuildUnitUpdate(guid, PublicEventOperationType.AddToObjective));
+        }
+
+        /// <summary>
+        /// Show <see cref="IWorldEntity"/> as a target of the active objective if its creature is in the objective's target
+        /// group, e.g. a unit the event spawned.
+        /// </summary>
+        public void MarkUnit(IWorldEntity entity)
+        {
+            if (!MarksUnits || Status != PublicEventStatus.Active || entity is IPlayer || markedUnits.Contains(entity.Guid))
+                return;
+
+            TargetGroupEntry targetGroup = Entry.ObjectId != 0 ? GameTableManager.Instance.TargetGroup.GetEntry(Entry.ObjectId) : null;
+            if (targetGroup?.Type != 1u
+                || AssetManager.Instance.GetTargetGroupsForCreatureId(entity.CreatureId)?.Contains(Entry.ObjectId) != true)
+                return;
+
+            markedUnits.Add(entity.Guid);
+            BroadcastObjectiveUpdate(BuildUnitUpdate(entity.Guid, PublicEventOperationType.AddToObjective));
+        }
+
+        /// <summary>
+        /// Forget a unit that left the map.
+        /// </summary>
+        public void UnmarkUnit(uint guid)
+        {
+            markedUnits.Remove(guid);
+        }
+
+        private void MarkUnits()
+        {
+            foreach (IGridEntity entity in Team.PublicEvent.GetEntities())
+                if (entity is IWorldEntity { InWorld: true } worldEntity)
+                    MarkUnit(worldEntity);
+        }
+
+        private void UnmarkUnits()
+        {
+            foreach (uint guid in markedUnits)
+                BroadcastObjectiveUpdate(BuildUnitUpdate(guid, PublicEventOperationType.RemoveFromObjective));
+            markedUnits.Clear();
+        }
+
+        private ServerPublicEventUnitUpdate BuildUnitUpdate(uint guid, PublicEventOperationType operation)
+        {
+            return new ServerPublicEventUnitUpdate
+            {
+                UnitId    = guid,
+                EventId   = Entry.Id, // the objective id for the objective operations
+                Operation = operation
+            };
         }
 
         private void BroadcastLocation(PublicEventOperationType operation, uint worldLocation2Id)
