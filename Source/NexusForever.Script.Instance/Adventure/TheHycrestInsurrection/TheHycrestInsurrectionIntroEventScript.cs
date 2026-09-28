@@ -189,8 +189,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     dropShip.ShipGuid = worldEntity.Guid;
                     break;
                 case PublicEventCreature.DominionDropship when worldEntity is IUnitEntity glowCopy:
-                    // the unit copy of the ship (phase ShipGlowPhase): glows green with the sync spell, then goes
-                    ShipGlow(glowCopy);
+                    // the unit copies of the ship and its doors (phase ShipGlowPhase): glow green with the sync spell, then go
+                    ShipGlow(glowCopy, StandState.State1);
+                    break;
+                case PublicEventCreature.DropshipDoorRight or PublicEventCreature.DropshipDoorLeft when worldEntity is IUnitEntity glowCopy:
+                    ShipGlow(glowCopy, StandState.State0);
                     break;
                 case PublicEventCreature.DominionDropship:
                     // hovering at its start point, engines running; players enter on its deck and it flies forward to the
@@ -316,9 +319,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             actionQueue.Enqueue(DawsonAppearDelay, ShowDawson);
         }
 
-        private void ShipGlow(IUnitEntity glowCopy)
+        private void ShipGlow(IUnitEntity glowCopy, StandState state)
         {
-            HycrestDropShip.SetState(glowCopy, StandState.State1);
+            // same state as the entity it covers (ship hovering, doors closed)
+            HycrestDropShip.SetState(glowCopy, state);
 
             uint guid = glowCopy.Guid;
             actionQueue.Enqueue(ShipGlowLead, () =>

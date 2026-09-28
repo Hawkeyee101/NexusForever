@@ -33,6 +33,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             public double SinceBoarded;
             public bool ReachedDeck;
             public double SinceCast;
+            public bool CastConfirmed;
             public float SampleY;
             public double SinceSample;
             public double SinceFall;
@@ -51,8 +52,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // re-applied just before it runs out so there is no gap
         private const uint RocketFallSpell = 47734u;
         private const double RocketFallRecast = 2.9d;
-        // a cast that didn't take (e.g. the player was still casting) is tried again this soon
-        private const double RocketFallRetry = 0.25d;
+        // a cast that didn't take (e.g. the player was still casting) is tried again after this
+        private const double RocketFallRetry = 0.5d;
 
         // landed: within LandedHeight of the terrain (map file; props like roofs aren't in it), or no longer falling
         // (moved less than LandedMaxDrop vertically within LandedWindow) once the player has fallen for at least
@@ -241,8 +242,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             uint turnMs = (uint)HycrestShipLayout.TurnDuration.TotalMilliseconds;
 
             ship.MovementManager.SetPositionKeys([0u, flyMs], [ship.Position, HycrestShipLayout.Origin]);
-            ship.MovementManager.SetRotationKeys([0u, flyMs, flyMs + turnMs],
-                [ship.Rotation, ship.Rotation, new Vector3(HycrestShipLayout.Yaw, 0f, 0f)]);
+
+            // like retail the ship banks into the turn: it starts turning just before it reaches the hover point, rolls
+            // into the turn (rotation is yaw, pitch, roll) and levels out as it comes to its final heading
+            uint turnStart = flyMs > HycrestShipLayout.TurnLead ? flyMs - HycrestShipLayout.TurnLead : 0u;
+            float startYaw = ship.Rotation.X;
+            var banked = new Vector3(startYaw + (HycrestShipLayout.Yaw - startYaw) / 2f, 0f, HycrestShipLayout.TurnBank);
+            ship.MovementManager.SetRotationKeys([0u, turnStart, turnStart + turnMs / 2u, turnStart + turnMs],
+                [ship.Rotation, ship.Rotation, banked, new Vector3(HycrestShipLayout.Yaw, 0f, 0f)]);
 
             // a moment of margin for the keys to settle before late players are put on board
             actionQueue.Enqueue(TimeSpan.FromMilliseconds(flyMs + turnMs + 500u), () => Arrived = true);
@@ -462,13 +469,26 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             }
 
             drop.SinceCast += lastTick;
+
+            // a cast that didn't take (e.g. the player was still casting) is tried again; checked a moment after the cast,
+            // right after it the spell isn't registered yet (checking then cast it twice)
+            if (!drop.CastConfirmed && drop.SinceCast >= RocketFallRetry)
+            {
+                if (player.GetSpellBySpellId(RocketFallSpell) != null)
+                    drop.CastConfirmed = true;
+                else
+                    CastRocketFall(player, drop);
+                return;
+            }
+
             if (drop.SinceCast >= RocketFallRecast)
                 CastRocketFall(player, drop);
         }
 
         private void CastRocketFall(IPlayer player, PlayerDrop drop)
         {
-            drop.SinceCast = 0d;
+            drop.SinceCast     = 0d;
+            drop.CastConfirmed = false;
 
             // cast by the script, not the player: skips the cooldown and global cooldown checks (a player cast just before
             // the jump put Rocket Fall on the global cooldown and the cast failed)
@@ -476,9 +496,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             parameters.PrimaryTargetId        = player.Guid;
             parameters.UserInitiatedSpellCast = false;
             player.CastSpell(RocketFallSpell, parameters);
-
-            if (player.GetSpellBySpellId(RocketFallSpell) == null)
-                drop.SinceCast = RocketFallRecast - RocketFallRetry;
         }
     }
 }
