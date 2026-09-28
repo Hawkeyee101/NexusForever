@@ -109,10 +109,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             if (entity.Map == null)
                 return;
 
+            // back to the NPC's own stand state, a seated NPC (Ayita) sits down again
             entity.EnqueueToVisible(new ServerEmote
             {
                 Guid       = entity.Guid,
-                StandState = StandState.Stand
+                StandState = entity.StandState is StandState.Sit ? StandState.Sit : StandState.Stand
             });
         }
     }

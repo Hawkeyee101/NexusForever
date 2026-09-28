@@ -261,7 +261,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// Queue <paramref name="lines"/> one after another starting after <paramref name="start"/>, returns when the last line ends.
         /// </summary>
         private TimeSpan QueueLines(TimeSpan start, IEnumerable<(PublicEventCreature Speaker, uint TextId)> lines, bool whileVoting = false,
-            TimeSpan shortening = default)
+            TimeSpan shortening = default, bool gestures = false)
         {
             TimeSpan time = start;
             foreach ((PublicEventCreature speaker, uint textId) in lines)
@@ -270,7 +270,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 {
                     // the argument during a vote stops once the vote is over (solo, it ends as soon as you vote)
                     if (!whileVoting || voteInProgress)
-                        dialogue.Say(GetNpc(speaker), textId, UsesGesture(speaker));
+                        dialogue.Say(GetNpc(speaker), textId, gestures || UsesGesture(speaker));
                 });
                 TimeSpan duration = GetLineDuration(textId) - shortening;
                 time += shortening > TimeSpan.Zero && duration < BarnMinLineGap ? BarnMinLineGap : duration;
@@ -555,9 +555,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
             }
 
-            TimeSpan time = QueueLines(TimeSpan.Zero, scene.Lead);
+            // everyone gestures while talking here, Ayita too (retail video)
+            TimeSpan time = QueueLines(TimeSpan.Zero, scene.Lead, gestures: true);
             sceneQueue.Enqueue(time, () => StartVote(voteId));
-            QueueLines(time, scene.DuringVote, whileVoting: true);
+            QueueLines(time, scene.DuringVote, whileVoting: true, gestures: true);
         }
 
         private void CompleteRun()
