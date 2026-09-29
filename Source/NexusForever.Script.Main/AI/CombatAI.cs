@@ -263,6 +263,10 @@ namespace NexusForever.Script.Main.AI
         {
             entity.SetTarget((IWorldEntity)null);
 
+            // a dying unit's threat list is cleared too: it isn't healed or sent home (it came back with full health)
+            if (!entity.IsAlive)
+                return;
+
             entity.ModifyHealth(entity.MaxHealth, DamageType.Heal, null);
 
             // TODO: cancel all pending spells

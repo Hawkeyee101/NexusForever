@@ -4,7 +4,7 @@ using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Creature;
 using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.PublicEvent;
-using NexusForever.Game.Abstract.Quest;
+using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Network.World.Message.Model.Shared;
@@ -37,8 +37,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint SpecialistBark = 560790u; // "Wait until my friends show up."
         private const uint FlareTooltip = 458313u;   // "A Dominion Unit has released a signal flare, summoning a Rapid Response Team!"
         private const uint TeamTooltip = 458314u;    // "A Dominion Rapid Response Team has arrived nearby!"
-        private const uint VesnaFlare = 5022u;       // communicator: "Stop the Dominion from calling in reinforcements..."
-        private const uint VesnaTeam = 5023u;        // communicator: "...if you hide in the shadows, they will eventually retreat."
+        // Vesna's lines of communicators 5022/5023, sent as story communicators: the client shows a communicator message
+        // only once, the alarm can go off several times
+        private const uint VesnaTaranoft = 17778u;
+        private const uint VesnaFlare = 461028u;     // "Stop the Dominion from calling in reinforcements..."
+        private const uint VesnaTeam = 461029u;      // "...if you hide in the shadows, they will eventually retreat."
+        private const uint VesnaFlareDurationMs = 10000u;
+        private const uint VesnaTeamDurationMs = 16000u;
+        private static readonly TimeSpan VesnaTeamDelay = TimeSpan.FromSeconds(3);
 
         private static readonly TimeSpan CastDelay = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan CastTime = TimeSpan.FromSeconds(5);
@@ -88,7 +94,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private readonly IMapInstance mapInstance;
         private readonly ICreatureInfoManager creatureInfoManager;
         private readonly IFactory<ISpellParameters> spellParametersFactory;
-        private readonly IGlobalQuestManager globalQuestManager;
+        private readonly IStoryBuilder storyBuilder;
         private readonly HycrestDialogue dialogue;
 
         public HycrestAlarm(
@@ -97,7 +103,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             IMapInstance mapInstance,
             ICreatureInfoManager creatureInfoManager,
             IFactory<ISpellParameters> spellParametersFactory,
-            IGlobalQuestManager globalQuestManager,
+            IStoryBuilder storyBuilder,
             HycrestDialogue dialogue)
         {
             this.log                    = log;
@@ -105,7 +111,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             this.mapInstance            = mapInstance;
             this.creatureInfoManager    = creatureInfoManager;
             this.spellParametersFactory = spellParametersFactory;
-            this.globalQuestManager     = globalQuestManager;
+            this.storyBuilder           = storyBuilder;
             this.dialogue               = dialogue;
         }
 
@@ -129,7 +135,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             callSpell      = null;
             stateTimer     = CastDelay.TotalSeconds;
 
-            SendCommunicator(VesnaFlare);
+            SendCommunicator(VesnaFlare, VesnaFlareDurationMs);
             log.LogInformation($"Hycrest: alarm, Recon Specialist spawned at {position}.");
         }
 
@@ -314,7 +320,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             });
 
             Broadcast(TeamTooltip);
-            SendCommunicator(VesnaTeam);
+            actionQueue.Enqueue(VesnaTeamDelay, () => SendCommunicator(VesnaTeam, VesnaTeamDurationMs));
             log.LogInformation("Hycrest: alarm, Rapid Response Team arrived.");
         }
 
@@ -372,11 +378,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 });
         }
 
-        private void SendCommunicator(uint communicatorMessageId)
+        private void SendCommunicator(uint textId, uint durationMs)
         {
-            ICommunicatorMessage message = globalQuestManager.GetCommunicatorMessage(communicatorMessageId);
             foreach (IPlayer player in mapInstance.GetPlayers())
-                message?.Send(player.Session);
+                storyBuilder.SendStoryCommunicator(textId, VesnaTaranoft, player, durationMs);
         }
     }
 }

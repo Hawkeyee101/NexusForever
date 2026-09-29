@@ -196,7 +196,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             publicEvent.SetObjectiveLocations(RescueCaptives, layout.MillitheaLocation);
 
             alarm = new HycrestAlarm(log, publicEvent, mapInstance, creatureInfoManager, spellParametersFactory,
-                globalQuestManager, dialogue);
+                storyBuilder, dialogue);
         }
 
         /// <summary>
