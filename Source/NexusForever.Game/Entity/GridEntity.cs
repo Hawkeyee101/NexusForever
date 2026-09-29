@@ -224,14 +224,13 @@ namespace NexusForever.Game.Entity
             // the entity's own collections must be cleared too: a player keeps its instance when moving between maps and
             // stale entries (keyed by guids of the old map) would stop the new map from sending those guids, including
             // the player's own
+            // (both sides through RemoveVisionEntity, so the visibility hooks still fire)
             foreach ((uint _, IGridEntity entity) in visibleEntities.Concat(invisibleEntities).ToList())
             {
+                RemoveVisionEntity(entity);
                 if (entity != this)
                     entity.RemoveVisionEntity(this);
             }
-
-            visibleEntities.Clear();
-            invisibleEntities.Clear();
 
             foreach ((uint gridX, uint gridZ) in visibleGrids.ToList())
                 RemoveVisible(gridX, gridZ);
