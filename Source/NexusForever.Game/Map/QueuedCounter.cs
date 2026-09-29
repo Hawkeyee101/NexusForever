@@ -7,11 +7,12 @@ namespace NexusForever.Game.Map
     /// </summary>
     /// <remarks>
     /// The client keeps a removed unit around for a moment (e.g. a despawn or fly-off), so a new unit that gets its id right
-    /// away can take over the old one's state: a door spawned just after a ship left with the same guid vanished on the client.
+    /// away can take over the old one's state: a barn door that got the guid of an NPC who had ridden a ship 34 s earlier
+    /// vanished on the client (30 s was too short).
     /// </remarks>
     public class QueuedCounter : IQueuedCounter
     {
-        private static readonly TimeSpan ReuseDelay = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan ReuseDelay = TimeSpan.FromMinutes(5);
 
         private uint counter = 1;
         private readonly Queue<(uint Value, long Released)> queue = new();
