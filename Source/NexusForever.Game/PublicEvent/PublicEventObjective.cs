@@ -122,11 +122,10 @@ namespace NexusForever.Game.PublicEvent
             else
                 BroadcastObjectiveStatusUpdate();
 
-            // the map locations show while the objective is active
-            foreach (uint id in locations)
-                BroadcastLocation(status == PublicEventStatus.Active
-                    ? PublicEventOperationType.AddToObjective
-                    : PublicEventOperationType.RemoveFromObjective, id);
+            // the map locations show while the objective is active (sent with the full objective above on activation)
+            if (status != PublicEventStatus.Active)
+                foreach (uint id in locations)
+                    BroadcastLocation(PublicEventOperationType.RemoveFromObjective, id);
 
             Team.PublicEvent.InvokeScriptCollection<IPublicEventScript>(s => s.OnPublicEventObjectiveStatus(this));
         }
@@ -137,6 +136,12 @@ namespace NexusForever.Game.PublicEvent
             {
                 Objective = Build()
             });
+
+            // the full objective resets the client's locations for it (its location list is empty), send them again: a
+            // location set just before a count update (a script reacting to the interaction that counts) was lost
+            if (Status == PublicEventStatus.Active)
+                foreach (uint id in locations)
+                    BroadcastLocation(PublicEventOperationType.AddToObjective, id);
         }
 
         private void BroadcastObjectiveStatusUpdate()
