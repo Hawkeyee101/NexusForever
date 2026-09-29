@@ -57,6 +57,10 @@ namespace NexusForever.Game.PublicEvent
             Status = entry.PublicEventObjectiveFlags.HasFlag(PublicEventObjectiveFlag.InitialObjective)
                 ? PublicEventStatus.Active : PublicEventStatus.Inactive;
 
+            // created once and frozen, it only runs while the objective is active
+            if (entry.FailureTimeMs > 0)
+                failureTimer = new UpdateTimer(TimeSpan.FromMilliseconds(entry.FailureTimeMs), false);
+
             if (Status == PublicEventStatus.Active)
                 StartTimers();
         }
@@ -70,7 +74,7 @@ namespace NexusForever.Game.PublicEvent
         private void StartTimers()
         {
             elapsedTimer = 0d;
-            failureTimer = Entry.FailureTimeMs > 0 ? new UpdateTimer(TimeSpan.FromMilliseconds(Entry.FailureTimeMs)) : null;
+            failureTimer?.Reset();
         }
 
         /// <summary>
@@ -86,14 +90,12 @@ namespace NexusForever.Game.PublicEvent
 
             elapsedTimer += lastTick;
 
-            if (failureTimer == null)
+            if (failureTimer == null || !failureTimer.IsTicking)
                 return;
 
             failureTimer.Update(lastTick);
             if (failureTimer.HasElapsed)
             {
-                failureTimer = null;
-
                 // timed wait objectives (waiting for an NPC to finish speaking, an animation or an event) succeed when
                 // the timer ends, any other timed objective fails
                 SetStatus(Entry.PublicEventObjectiveTypeEnum == PublicEventObjectiveType.TimedWin
@@ -112,7 +114,7 @@ namespace NexusForever.Game.PublicEvent
                     SelectTargets();
             }
             else
-                failureTimer = null;
+                failureTimer?.Pause();
 
             // the client runs an objective's timer from the ElapsedTimeMs it last received (at event start for objectives
             // activated later), so activation sends the full objective (it includes the status) to restart the client's
