@@ -7,6 +7,8 @@ using NexusForever.Game.Abstract.Map.Lock;
 using NexusForever.Game.Abstract.PublicEvent;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.Shared;
+using NexusForever.Shared.Configuration;
+using NexusForever.Game.Configuration.Model;
 using NexusForever.Game.Map;
 using NexusForever.Game.Static.Map;
 using NexusForever.Game.Static.RBAC;
@@ -187,7 +189,7 @@ namespace NexusForever.WorldServer.Command.Handler
             context.SendMessage($"Sent hex group {hexGroupId} (visible {(visible ?? 1u) != 0u}, colour 0x{color ?? 0xFF00FF00u:X8}).");
         }
 
-        [Command(Permission.MapUnload, "Dev: send yourself a time of day (e.g. to see how a sky looks in the morning). The clock runs very slowly afterwards.", "timeofday")]
+        [Command(Permission.MapUnload, "Dev: send yourself a time of day (e.g. to see how a sky looks in the morning). The clock runs on from there at the realm's day length.", "timeofday")]
         public void HandleMapTimeOfDay(ICommandContext context,
             [Parameter("Hour (0-23).")]
             uint hour,
@@ -199,7 +201,8 @@ namespace NexusForever.WorldServer.Command.Handler
             player.Session.EnqueueMessageEncrypted(new ServerTimeOfDay
             {
                 TimeOfDay   = seconds,
-                LengthOfDay = 30u * 24u * 3600u
+                // the realm's day length, as sent at login: with a 30 day length every hour showed as night
+                LengthOfDay = SharedConfiguration.Instance.Get<RealmConfig>().LengthOfInGameDay is > 0u and uint length ? length : 12600u
             });
             context.SendMessage($"Sent time of day {hour % 24u:00}:{(minute ?? 0u) % 60u:00}.");
         }
