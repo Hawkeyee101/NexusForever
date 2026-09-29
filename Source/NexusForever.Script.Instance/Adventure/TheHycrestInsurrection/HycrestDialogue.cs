@@ -77,6 +77,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
+        /// Chatter shown only as a speech bubble in retail (e.g. families on the run), not in the chat.
+        /// </summary>
+        /// <remarks>
+        /// How retail sends a bubble without a chat line isn't known yet; until then it is a normal NPC say.
+        /// </remarks>
+        public void Bark(IWorldEntity speaker, uint textId)
+        {
+            Say(speaker, textId, false);
+        }
+
+        /// <summary>
         /// Play the talking gesture on <paramref name="entity"/> for every player that can see it, for about one talk cycle.
         /// </summary>
         public void PlayTalk(IWorldEntity entity)

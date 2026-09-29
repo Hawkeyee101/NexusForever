@@ -92,6 +92,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private bool voteInProgress;
         private IPublicEvent mission;
+        // the last finished mission: what it kept on the map (e.g. its enemies) goes once the hideout's barn closes
+        private IPublicEvent finishedMission;
         private IPublicEvent regroup;
 
         // the run so far: the tier of the current mission and the track chosen on each tier
@@ -115,6 +117,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // Skybox" (27236, 48797, 50045), a Fluff aura with the sky visual plus a force remove of the other skies.
         // Players entering later get it after they are on the map.
         private const uint MorningSkySpell = 50044u;
+        private const uint NightSkySpell = 50045u;
+
+        // the sky once a mission is done (retail video: back to night when The Great Escape returns to the barn)
+        private static readonly Dictionary<uint, uint> SkyAfterMission = new()
+        {
+            [423u] = NightSkySpell
+        };
         private static readonly TimeSpan SkyJoinDelay = TimeSpan.FromSeconds(1);
         private uint? skySpell;
 
@@ -487,6 +496,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             finished.InvokeScriptCollection<IHycrestMissionScript>(s => s.OnMissionEnded());
             if (mission == finished)
                 mission = null;
+            finishedMission = finished;
 
             if (!HycrestMissions.TryGetTierAndTrack(missionId, out int missionTier, out HycrestTrack track))
                 return;
@@ -503,6 +513,18 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             if (missionTier == HycrestMissions.FinaleTier - 1)
             {
                 sceneQueue.Enqueue(NextMissionDelay, () => StartMission(HycrestMissions.GetMission(HycrestMissions.FinaleTier, track)));
+                return;
+            }
+
+            if (SkyAfterMission.TryGetValue(missionId, out uint sky))
+                SetSky(sky);
+
+            // the mission's last objective already gathered everyone at the hideout
+            if (HycrestMissions.EndsAtHideout.Contains(missionId))
+            {
+                regroupObjective = HycrestMissions.RegroupAfter[missionId];
+                MoveNpcsTo(regroupObjective);
+                OnRegroupComplete();
                 return;
             }
 
@@ -615,7 +637,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public void OnRegroupComplete()
         {
             // the barn closes: the finished mission's remaining spawns (its enemies) go now
-            mission?.InvokeScriptCollection<IHycrestMissionScript>(s => s.OnHideoutClosed());
+            finishedMission?.InvokeScriptCollection<IHycrestMissionScript>(s => s.OnHideoutClosed());
+            finishedMission = null;
 
             CloseBarnDoor(regroupObjective);
             sceneQueue.Enqueue(TimeSpan.Zero, NextTier);

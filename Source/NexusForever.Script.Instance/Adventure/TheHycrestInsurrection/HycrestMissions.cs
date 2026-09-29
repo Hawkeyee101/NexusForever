@@ -125,12 +125,21 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             [420u] = RegroupSinnatusBarn, // retail video; the payoff text offers the Arcwulff farmhouse
             [421u] = RegroupSinnatusBarn,
             [422u] = RegroupSinnatusBarn,
-            [423u] = RegroupBellFarmhouse,
+            [423u] = RegroupAbandonedBarn, // retail video: its last objective returns to the (empty) barn
             [424u] = RegroupAyitasTavern,
             [425u] = RegroupArcwulffFarm,
             [426u] = RegroupAbandonedBarn,
             [427u] = RegroupAbandonedBarn,
             [428u] = RegroupAbandonedBarn
+        };
+
+        /// <summary>
+        /// Missions whose own last objective already brings the players to their hideout (<see cref="RegroupAfter"/>): no
+        /// separate regroup, the barn closes as soon as the mission is done.
+        /// </summary>
+        public static readonly IReadOnlySet<uint> EndsAtHideout = new HashSet<uint>
+        {
+            423u // The Great Escape: "Return to the Barn"
         };
 
         public const uint RegroupAbandonedBarn = 1772u;
