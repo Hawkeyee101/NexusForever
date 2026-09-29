@@ -13,6 +13,7 @@ using NexusForever.Game.Static.RBAC;
 using NexusForever.WorldServer.Command.Context;
 using NexusForever.WorldServer.Command.Convert;
 
+using NexusForever.Network.World.Message.Model;
 using NexusForever.Network.World.Message.Model.Map;
 using NexusForever.Network.World.Message.Model.PublicEvent;
 
@@ -184,6 +185,23 @@ namespace NexusForever.WorldServer.Command.Handler
                 IsVisible              = (visible ?? 1u) != 0u
             });
             context.SendMessage($"Sent hex group {hexGroupId} (visible {(visible ?? 1u) != 0u}, colour 0x{color ?? 0xFF00FF00u:X8}).");
+        }
+
+        [Command(Permission.MapUnload, "Dev: send yourself a time of day (e.g. to see how a sky looks in the morning). The clock runs very slowly afterwards.", "timeofday")]
+        public void HandleMapTimeOfDay(ICommandContext context,
+            [Parameter("Hour (0-23).")]
+            uint hour,
+            [Parameter("Minute (0-59, default 0).")]
+            uint? minute)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            uint seconds = (hour % 24u) * 3600u + (minute ?? 0u) % 60u * 60u;
+            player.Session.EnqueueMessageEncrypted(new ServerTimeOfDay
+            {
+                TimeOfDay   = seconds,
+                LengthOfDay = 30u * 24u * 3600u
+            });
+            context.SendMessage($"Sent time of day {hour % 24u:00}:{(minute ?? 0u) % 60u:00}.");
         }
 
         private static IPublicEvent GetRunningEvent(ICommandContext context, uint eventId)
