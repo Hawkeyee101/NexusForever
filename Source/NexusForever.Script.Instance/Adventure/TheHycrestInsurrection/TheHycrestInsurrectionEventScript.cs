@@ -116,6 +116,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // spells on the players: "Hycrest Adventure - Daytime Skybox" (27013, Quick 48796, Long 50044) and "Nighttime
         // Skybox" (27236, 48797, 50045), a Fluff aura with the sky visual plus a force remove of the other skies.
         // Players entering later get it after they are on the map.
+        // the Long variants: the Quick day sky (48796) was removed again right after it was cast (30 Sep 2026, the barn
+        // stayed night); retail switches the sky at once while the barn doors are closed, the Long ones fade slowly
         private const uint MorningSkySpell = 50044u;
         private const uint NightSkySpell = 50045u;
 
@@ -143,6 +145,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // at least this long after the mission appears (and once its spawns are all on the map)
         private static readonly TimeSpan MinDoorOpenDelay = TimeSpan.FromSeconds(2);
         private double openDoorsWait;
+        // a door that has just closed stays closed at least this long (after The Great Escape the next mission follows
+        // right away, the door reopened the moment it closed)
+        private static readonly TimeSpan MinDoorClosedTime = TimeSpan.FromSeconds(8);
+        private double doorClosedAt = double.MinValue;
         private uint regroupObjective;
         private uint hideoutPhase;
 
@@ -212,6 +218,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // never before the new time of day is set, nor before the mission has everything on the map
             if (timeOfDayPending
                 || openDoorsWait < MinDoorOpenDelay.TotalSeconds
+                || sceneClock - doorClosedAt < MinDoorClosedTime.TotalSeconds
                 || !openDoorsFor.HasFinished && openDoorsFor.GetEntities().Any(e => !e.InWorld))
                 return;
 
@@ -608,7 +615,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private void CloseBarnDoor(uint regroupObjective)
         {
             if (BarnDoorPhases.TryGetValue(regroupObjective, out uint phase))
+            {
                 publicEvent.SetPhase(phase);
+                doorClosedAt = sceneClock;
+            }
         }
 
         /// <summary>

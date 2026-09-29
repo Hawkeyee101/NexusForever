@@ -35,10 +35,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint AyitaSinnatus     = 48032u;
         private const uint DominionGatekeeper = 26853u;
 
-        // the gatekeeper at Highfeather's gate turns farmers away, as speech bubbles only (retail video); every few
-        // seconds while a player is near
+        // the gatekeeper at Highfeather's gate turns farmers away, as speech bubbles only (retail video): he starts when a
+        // player comes near and goes on every few seconds while someone is near
         private static readonly uint[] GatekeeperLines = [465729u, 465730u, 465731u, 465732u, 465733u];
-        private const float GatekeeperRange = 30f;
+        private const float GatekeeperRange = 25f;
         private const double GatekeeperMinInterval = 10d;
         private const double GatekeeperMaxInterval = 16d;
         private uint gatekeeperGuid;
@@ -69,8 +69,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         // a family starts when a player is this close to the middle of their house
         private const float HouseTriggerRange = 6f;
 
-        // families run; the table routes carry no speed
-        private const float RunSpeed = 6f;
+        // families run; the table routes carry no speed. At 6 m/s the client still showed a walk; 8 m/s is what chasing
+        // units use (move speed x 8) and runs
+        private const float RunSpeed = 8f;
+        // the father speaks first, then they set off (moving right away seemed to swallow his speech bubble)
+        private static readonly TimeSpan SetOffDelay = TimeSpan.FromSeconds(2);
         // single file: each member starts this much after the one in front
         private static readonly TimeSpan FileSpacing = TimeSpan.FromSeconds(0.6);
         // side by side: the members' lanes are this far apart
@@ -235,16 +238,22 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private void UpdateGatekeeper(double lastTick)
         {
+            if (mapInstance.GetEntity<IWorldEntity>(gatekeeperGuid) is not IUnitEntity { IsAlive: true, InCombat: false } gatekeeper)
+                return;
+
+            // quiet while nobody is near; the next player to come close hears him right away
+            if (!mapInstance.GetPlayers().Any(p => p.IsAlive && Vector3.Distance(p.Position, gatekeeper.Position) <= GatekeeperRange))
+            {
+                gatekeeperTimer = 0d;
+                return;
+            }
+
             gatekeeperTimer -= lastTick;
             if (gatekeeperTimer > 0d)
                 return;
 
             gatekeeperTimer = GatekeeperMinInterval + Random.Shared.NextDouble() * (GatekeeperMaxInterval - GatekeeperMinInterval);
-            if (mapInstance.GetEntity<IWorldEntity>(gatekeeperGuid) is not IUnitEntity { IsAlive: true, InCombat: false } gatekeeper)
-                return;
-
-            if (mapInstance.GetPlayers().Any(p => Vector3.Distance(p.Position, gatekeeper.Position) <= GatekeeperRange))
-                dialogue.Bark(gatekeeper, GatekeeperLines[Random.Shared.Next(GatekeeperLines.Length)]);
+            dialogue.Bark(gatekeeper, GatekeeperLines[Random.Shared.Next(GatekeeperLines.Length)]);
         }
 
         private void UpdateFamily(Family family, double lastTick)
@@ -320,13 +329,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 }
 
                 path.Add(Grounded(spots[role]));
+                delay += SetOffDelay.TotalSeconds;
                 arrival = Math.Max(arrival, delay + Run(member, path, delay));
             }
 
             family.Timer = arrival;
 
             foreach ((Role speaker, uint text, double seconds) in data.Chatter)
-                actionQueue.Enqueue(TimeSpan.FromSeconds(seconds), () => dialogue.Bark(GetMember(family, speaker), text));
+                actionQueue.Enqueue(TimeSpan.FromSeconds(seconds) + SetOffDelay, () => dialogue.Bark(GetMember(family, speaker), text));
 
             UpdateMarkers();
         }
@@ -443,8 +453,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 if (member == null)
                     continue;
 
+                // each member disappears as they reach the end of the route
                 double delay = FileSpacing.TotalSeconds * i;
-                gone = Math.Max(gone, delay + Run(member, [.. route], delay));
+                double end = delay + Run(member, [.. route], delay);
+                uint guid = member.Guid;
+                actionQueue.Enqueue(TimeSpan.FromSeconds(end + 0.2d), () =>
+                {
+                    if (mapInstance.GetEntity<IWorldEntity>(guid) is { InWorld: true } leaving)
+                        leaving.RemoveFromMap();
+                });
+                gone = Math.Max(gone, end);
             }
             family.Timer = gone + 0.5d;
 

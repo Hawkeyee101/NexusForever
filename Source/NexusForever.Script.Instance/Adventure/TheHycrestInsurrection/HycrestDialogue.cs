@@ -1,10 +1,13 @@
 using System.Text.RegularExpressions;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Static.Chat;
 using NexusForever.Game.Static.Entity;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Entity;
 using NexusForever.Network.World.Message.Model;
+using NexusForever.Network.World.Message.Model.Chat;
+using NexusForever.Network.World.Message.Model.Shared;
 
 namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 {
@@ -70,10 +73,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             string raw = gameTableManager.TextEnglish.GetEntry(textId) ?? string.Empty;
-            speaker.NpcSay(GetText(textId));
+            SendSay(speaker, GetText(textId));
 
             if (gesture ?? SelfVisualRegex().IsMatch(raw))
                 PlayTalk(speaker);
+        }
+
+        /// <summary>
+        /// NPC say (speech bubble and chat) to the players that can see <paramref name="speaker"/>.
+        /// </summary>
+        /// <remarks>
+        /// WorldEntity.NpcSay finds its listeners with a grid search around the speaker, which once missed the player in the
+        /// barn (Lysion's first briefing line never arrived, while his talk emote, sent to the players that can see him, did).
+        /// A bubble needs the unit on the client anyway, so the visible players are the right audience.
+        /// </remarks>
+        private void SendSay(IWorldEntity speaker, string text)
+        {
+            Creature2Entry creature = gameTableManager.Creature2.GetEntry(speaker.CreatureId);
+            speaker.EnqueueToVisible(new ServerChat
+            {
+                Channel   = new Channel { ChatChannelId = ChatChannelType.NPCSay },
+                From      = new Identity(),
+                FromName  = creature != null ? gameTableManager.TextEnglish.GetEntry(creature.LocalizedTextIdName) ?? string.Empty : string.Empty,
+                FromRealm = string.Empty,
+                Text      = text,
+                UnitId    = speaker.Guid
+            });
         }
 
         /// <summary>
