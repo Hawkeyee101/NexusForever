@@ -19,13 +19,14 @@ namespace NexusForever.Script.Watcher
         /// </summary>
         public override void Initialise(string path)
         {
+            // no LastAccess: reading the file (a grep, an editor, git) raised a reload and swapped the scripts mid-game
             var watcher = new FileSystemWatcher
             {
                 Path                  = path,
                 Filter                = "*.cs",
                 IncludeSubdirectories = true,
                 NotifyFilter          = NotifyFilters.Attributes | NotifyFilters.CreationTime | NotifyFilters.DirectoryName
-                    | NotifyFilters.FileName | NotifyFilters.LastAccess | NotifyFilters.LastWrite | NotifyFilters.Security | NotifyFilters.Size,
+                    | NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Security | NotifyFilters.Size,
             };
 
             watcher.Changed += RaiseEvent;
