@@ -96,9 +96,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private static readonly TimeSpan SpotlightRetrackInterval = TimeSpan.FromSeconds(0.5);
 
         // the alarm (retail videos): every 5th kill of the mission's Dominion units summons a Recon Specialist, who calls
-        // the Rapid Response Team; he appears this far from the fallen unit, on the side away from the nearest player
+        // the Rapid Response Team; he appears this far from the fallen unit, on the side away from the nearest player, and
+        // runs in (see HycrestAlarm)
         private const int AlarmKills = 5;
-        private const float AlarmSpawnDistance = 20f;
+        private const float AlarmSpawnDistance = 35f;
 
         private static readonly TimeSpan MissionEndDelay = TimeSpan.FromSeconds(4);
 

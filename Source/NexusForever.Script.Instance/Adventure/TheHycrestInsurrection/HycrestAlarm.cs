@@ -47,6 +47,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly TimeSpan VesnaTeamDelay = TimeSpan.FromSeconds(3);
 
         private static readonly TimeSpan CastDelay = TimeSpan.FromSeconds(1);
+        // the specialist runs at the player he engaged and calls once he is this close, or after the time limit
+        private const float CallRange = 10f;
+        private static readonly TimeSpan MaxApproachTime = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan CastTime = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan RecastDelay = TimeSpan.FromSeconds(4);
         private static readonly TimeSpan FlareDuration = TimeSpan.FromSeconds(14);
@@ -85,6 +88,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private uint targetGuid;
         private ISpell callSpell;
         private double callElapsed;
+        private double approachTime;
         private double stateTimer;
 
         private readonly TimedActionQueue actionQueue = new();
@@ -134,6 +138,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             state          = AlarmState.Calling;
             callSpell      = null;
             stateTimer     = CastDelay.TotalSeconds;
+            approachTime   = 0d;
+
+            // engage once on the map, so he runs at the player
+            IUnitEntity runner = specialist;
+            actionQueue.Enqueue(TimeSpan.FromMilliseconds(500), () =>
+            {
+                IPlayer player = mapInstance.GetEntity<IPlayer>(targetGuid);
+                if (runner.InWorld && runner.IsAlive && player is { IsAlive: true })
+                    runner.ThreatManager.UpdateThreat(player, 1);
+            });
 
             SendCommunicator(VesnaFlare, VesnaFlareDurationMs);
             log.LogInformation($"Hycrest: alarm, Recon Specialist spawned at {position}.");
@@ -176,6 +190,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             {
                 stateTimer -= lastTick;
                 if (stateTimer > 0d)
+                    return;
+
+                // still running in
+                approachTime += lastTick;
+                IPlayer target = mapInstance.GetEntity<IPlayer>(targetGuid);
+                if (target is { IsAlive: true }
+                    && Vector3.Distance(target.Position, specialist.Position) > CallRange
+                    && approachTime < MaxApproachTime.TotalSeconds)
                     return;
 
                 StartCall();
