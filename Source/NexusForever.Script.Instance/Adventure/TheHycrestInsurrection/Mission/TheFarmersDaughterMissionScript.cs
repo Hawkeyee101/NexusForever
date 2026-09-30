@@ -54,15 +54,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         /// <summary>
         /// Where the captives are: retail places Millithea (with her drones) and Prema (with the Responsebot) at one of
-        /// two spots per run, everything else is shared. Each layout has its own phases (SQL) and map markers (the table
-        /// points next to them: Millithea 39383/39384 are consecutive ids at her two spots, retail's own points).
+        /// three spots per run, everything else is shared. Each layout has its own phases (SQL) and map markers (the table
+        /// points next to them: Millithea 39382/39383/39384 are consecutive ids at her three spots, retail's own points;
+        /// layout C was confirmed by the archived Jabbithole NPC positions).
         /// </summary>
         private record Layout(string Name, uint MillitheaPhase, uint PremaPhase, uint MillitheaLocation, uint PremaLocation);
 
         private static readonly Layout[] Layouts =
         [
             new("A", 10u, 20u, 39383u, 40050u),
-            new("B", 11u, 21u, 39384u, 38652u)
+            new("B", 11u, 21u, 39384u, 38652u),
+            new("C", 12u, 22u, 39382u, 38650u)
         ];
 
         private Layout layout;
@@ -124,9 +126,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 new(-2523.5139f, -927.9279f, -1365.8789f), new(-2536.1279f, -929.4191f, -1371.1870f),
                 new(-2542.7739f, -929.5908f, -1384.3730f), new(-2540.9487f, -929.5251f, -1385.4309f)
             ],
-            [new(-2468.567f, -929.0733f, -1593.2743f), new(-2470.2705f, -925.0637f, -1659.7626f)],
-            [new(-2490.1282f, -920.8113f, -1672.5258f), new(-2492.663f, -929.0888f, -1607.7689f)],
-            [new(-2402.416f, -928.3815f, -1673.6968f), new(-2401.0205f, -927.10114f, -1683.4856f)]
+        ];
+
+        // the other spotlights patrol table loop splines around the three captive areas (retail: archived Jabbithole
+        // spotlight positions lie around all three, whichever layout; spline groups of five small loops each)
+        private static readonly ushort[] SpotlightSplines =
+        [
+            7960, 7961, 7962, 7963, 7964,  // layout A area
+            7950, 7952, 7954, 7956, 7959,  // layout B area
+            7932, 7933, 7934, 7935         // layout C area (with #1 above)
         ];
 
         private uint tarquimGuid;
@@ -246,7 +254,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 {
                     var spotlight = new Spotlight
                     {
-                        Loop = GetLoop(worldEntity.Position, SpotlightLanes) ?? [worldEntity.Position]
+                        Loop = GetLoop(worldEntity.Position, SpotlightLanes)
+                            ?? GetLoop(worldEntity.Position, GetSplineLanes())
+                            ?? [worldEntity.Position]
                     };
                     spotlights[worldEntity.Guid] = spotlight;
                     if (spotlight.Loop.Count > 1)
@@ -254,6 +264,31 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                     break;
                 }
             }
+        }
+
+        private Vector3[][] splineLanes;
+
+        /// <summary>
+        /// The nodes of the <see cref="SpotlightSplines"/>, without repeated control points.
+        /// </summary>
+        private Vector3[][] GetSplineLanes()
+        {
+            return splineLanes ??= SpotlightSplines
+                .Select(id =>
+                {
+                    var nodes = new List<Vector3>();
+                    foreach (Spline2NodeEntry node in gameTableManager.Spline2Node.Entries
+                        .Where(n => n.SplineId == id)
+                        .OrderBy(n => n.Ordinal))
+                    {
+                        var position = new Vector3(node.Position0, node.Position1, node.Position2);
+                        if (nodes.Count == 0 || Vector3.Distance(nodes[^1], position) > 0.05f)
+                            nodes.Add(position);
+                    }
+                    return nodes.ToArray();
+                })
+                .Where(n => n.Length > 1)
+                .ToArray();
         }
 
         /// <summary>
