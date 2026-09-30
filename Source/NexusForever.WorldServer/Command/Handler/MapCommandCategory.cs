@@ -16,6 +16,10 @@ using NexusForever.WorldServer.Command.Context;
 using NexusForever.WorldServer.Command.Convert;
 
 using NexusForever.Network.World.Message.Model;
+using NexusForever.Network.World.Message.Model.Chat;
+using NexusForever.Network.World.Message.Model.Shared;
+using NexusForever.Game.Static.Chat;
+using NexusForever.GameTable;
 using NexusForever.Network.World.Message.Model.Map;
 using NexusForever.Network.World.Message.Model.PublicEvent;
 
@@ -205,6 +209,35 @@ namespace NexusForever.WorldServer.Command.Handler
                 LengthOfDay = SharedConfiguration.Instance.Get<RealmConfig>().LengthOfInGameDay is > 0u and uint length ? length : 12600u
             });
             context.SendMessage($"Sent time of day {hour % 24u:00}:{(minute ?? 0u) % 60u:00}.");
+        }
+
+        [Command(Permission.MapUnload, "Dev: make your target (an NPC) say a test line to you on a chat channel number (ChatChannelType, e.g. 20 NPCSay, 21 NPCYell, 22 NPCWhisper, 23 Datachron, 24 Combat, 27 AnimatedEmote, 28 ActionEmote), to find one that shows a speech bubble without a chat line.", "npcsay")]
+        public void HandleMapNpcSay(ICommandContext context,
+            [Parameter("Chat channel type number.")]
+            uint channel,
+            [Parameter("Optional single word to say (default: the channel number).")]
+            string text)
+        {
+            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
+            IWorldEntity speaker = context.GetTargetOrInvoker<IWorldEntity>();
+            if (speaker == null || speaker == player)
+            {
+                context.SendError("Target an NPC first.");
+                return;
+            }
+
+            player.Session.EnqueueMessageEncrypted(new ServerChat
+            {
+                Channel   = new Channel { ChatChannelId = (ChatChannelType)channel },
+                From      = new Identity(),
+                FromName  = speaker.CreatureInfo != null
+                    ? GameTableManager.Instance.TextEnglish.GetEntry(speaker.CreatureInfo.Entry.LocalizedTextIdName) ?? "NPC"
+                    : "NPC",
+                FromRealm = string.Empty,
+                Text      = string.IsNullOrEmpty(text) ? $"Testing channel {channel} ({(ChatChannelType)channel})" : $"{text} (channel {channel})",
+                UnitId    = speaker.Guid
+            });
+            context.SendMessage($"Sent a line from {speaker.Guid} on channel {channel} ({(ChatChannelType)channel}).");
         }
 
         private static IPublicEvent GetRunningEvent(ICommandContext context, uint eventId)
