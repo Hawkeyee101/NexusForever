@@ -115,7 +115,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             Role[] RunOrder,
             bool SideBySide,
             (Role Speaker, uint Text, double Seconds)[] Chatter,
-            Vector3[] EnemySlots);
+            Vector3[] EnemySlots,
+            (Role Role, float X, float Z)[] GateSpots);
 
         private static readonly FamilyData[] Families =
         [
@@ -125,21 +126,24 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 439228u, // "Have you seen the city exits? They may as well just drop in a Warbot! It's hopeless!"
                 [Role.Child1, Role.Father, Role.Child2, Role.Mother], false,
                 [(Role.Child1, 466695u, 3d), (Role.Mother, 466694u, 6d)], // "I'm scared." / "Just keep moving..."
-                [new(-2353.1416f, -920.2465f, -1189.9047f), new(-2350.281f, -919.673f, -1185.1029f), new(-2355.8066f, -919.5453f, -1185.137f)]),
+                [new(-2353.1416f, -920.2465f, -1189.9047f), new(-2350.281f, -919.673f, -1185.1029f), new(-2355.8066f, -919.5453f, -1185.137f)],
+                [(Role.Mother, -2357f, -1205f), (Role.Child1, -2351f, -1209f), (Role.Child2, -2353f, -1205f)]),
             new("Bell",
                 new() { [Role.Father] = 50931u, [Role.Mother] = 50933u, [Role.Child1] = 50934u, [Role.Child2] = 50932u },
                 45850u, new(-2263.5f, -925.0f, -1331.2f), 45920u, 14704, 14705,
                 439225u, // "The guards have doubled within the last hour..."
                 [Role.Child1, Role.Father, Role.Child2, Role.Mother], false,
                 [(Role.Child2, 466692u, 4d), (Role.Child1, 466693u, 12d), (Role.Mother, 466698u, 15d)], // trust them? / Dominion catches us? / okay
-                [new(-2222.9888f, -929.37646f, -1261.5889f), new(-2221.6638f, -929.2328f, -1257.918f), new(-2217.944f, -929.41488f, -1257.3063f)]),
+                [new(-2222.9888f, -929.37646f, -1261.5889f), new(-2221.6638f, -929.2328f, -1257.918f), new(-2217.944f, -929.41488f, -1257.3063f)],
+                [(Role.Mother, -2235f, -1269f), (Role.Child1, -2233f, -1276f), (Role.Child2, -2232f, -1272f)]),
             new("Miller",
                 new() { [Role.Father] = 50935u, [Role.Mother] = 50937u, [Role.Child1] = 50938u, [Role.Child2] = 50936u },
                 45852u, new(-2340.8f, -928.0f, -1501.4f), 45921u, 14706, 14707,
                 439224u, // "Thank goodness you're here. We were going to leave, but the guards are blocking all the exits."
                 [Role.Child2, Role.Child1, Role.Father, Role.Mother], true,
                 [(Role.Child1, 466689u, 4d), (Role.Mother, 466690u, 7d)], // "Can we trust Exiles?" / "Ayita said they'd help us."
-                [new(-2245.3706f, -929.4354f, -1479.0824f), new(-2243.6775f, -928.9516f, -1483.457f), new(-2237.5989f, -929.13055f, -1482.1085f)])
+                [new(-2245.3706f, -929.4354f, -1479.0824f), new(-2243.6775f, -928.9516f, -1483.457f), new(-2237.5989f, -929.13055f, -1482.1085f)],
+                [(Role.Mother, -2252f, -1473f), (Role.Child1, -2258f, -1476f), (Role.Child2, -2254f, -1476f)])
         ];
 
         // wave make-ups seen in the videos, picked at random per wave and shuffled over the gate's three slots
@@ -297,7 +301,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             Vector3 forward = Flat(route[^1] - route[^2]);
             Vector3 side = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
 
-            // at the gate they stop in a triangle behind the father, one of the children a step further back
+            // at the gate the father stops at the end of the route, the others a few metres behind him: retail's spots
+            // (archived Jabbithole sightings of each family member near the gate); a triangle behind him otherwise
             var spots = new Dictionary<Role, Vector3>
             {
                 [Role.Father] = end,
@@ -305,6 +310,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 [Role.Child1] = end - forward * 1.5f - side * 1.5f,
                 [Role.Child2] = end - forward * 3f
             };
+            foreach ((Role role, float x, float z) in data.GateSpots)
+                spots[role] = new Vector3(x, end.Y, z);
 
             double arrival = 0d;
             for (int i = 0; i < data.RunOrder.Length; i++)
@@ -328,7 +335,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                     delay = FileSpacing.TotalSeconds * i;
                 }
 
-                path.Add(Grounded(spots[role]));
+                // stop short for a spot behind the father, rather than running to the end of the route and back
+                Vector3 spot = Grounded(spots[role]);
+                float back = Vector3.Distance(spot, end);
+                while (path.Count > 1 && Vector3.Distance(path[^1], end) < back)
+                    path.RemoveAt(path.Count - 1);
+                path.Add(spot);
                 delay += SetOffDelay.TotalSeconds;
                 arrival = Math.Max(arrival, delay + Run(member, path, delay));
             }
