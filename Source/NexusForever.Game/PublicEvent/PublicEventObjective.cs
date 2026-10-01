@@ -436,11 +436,14 @@ namespace NexusForever.Game.PublicEvent
 
         private Network.World.Message.Model.Shared.PublicEventObjectiveStatus BuildObjectiveStatus()
         {
+            // an Exterminate objective without a fixed count goes by the units left and no maximum: the client then shows
+            // "N Remaining", counting down (PublicEventTracker.lua, required count 0), as retail did
+            bool remaining = IsExterminate && Entry.Count == 0;
             return new Network.World.Message.Model.Shared.PublicEventObjectiveStatus
             {
                 Status        = Status,
-                ObjectiveData = IsChecklist ? Checklist : Count,
-                DynamicMax    = DynamicMax
+                ObjectiveData = IsChecklist ? Checklist : remaining ? DynamicMax - Math.Min(Count, DynamicMax) : Count,
+                DynamicMax    = remaining ? 0u : DynamicMax
             };
         }
     }
