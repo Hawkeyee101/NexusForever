@@ -498,9 +498,17 @@ namespace NexusForever.Game.Entity
         /// </summary>
         public virtual bool IsValidAttackTarget(IUnitEntity attacker)
         {
+            if (IsInvulnerable)
+                return false;
+
             // TODO: Expand on this. There's bound to be flags or states that should prevent an entity from being attacked.
             return (this is IPlayer or INonPlayerEntity);
         }
+
+        /// <summary>
+        /// While set, this <see cref="IUnitEntity"/> can't be attacked: no damage and no threat from attacks.
+        /// </summary>
+        public bool IsInvulnerable { get; set; }
 
         /// <summary>
         /// Deal damage to this <see cref="IUnitEntity"/> from the supplied <see cref="IUnitEntity"/>.

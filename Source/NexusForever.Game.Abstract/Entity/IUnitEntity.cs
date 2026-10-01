@@ -125,6 +125,12 @@ namespace NexusForever.Game.Abstract.Entity
         bool CanAttack(IUnitEntity target);
 
         /// <summary>
+        /// While set, this <see cref="IUnitEntity"/> can't be attacked: no damage and no threat from attacks (e.g. a script
+        /// keeping a boss out of reach until it joins the fight). Its faction and nameplate don't change.
+        /// </summary>
+        bool IsInvulnerable { get; set; }
+
+        /// <summary>
         /// Returns whether or not this <see cref="IUnitEntity"/> is an attackable target for supplied <see cref="IUnitEntity"/>.
         /// </summary>
         bool IsValidAttackTarget(IUnitEntity attacker);
