@@ -13,6 +13,7 @@ using NexusForever.Game.Static.Reputation;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Message.Model;
+using NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Script;
 using NexusForever.Script.Template.Filter;
 using NexusForever.Shared;
 
@@ -41,6 +42,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint ArsenaxSeverus = 48373u; // Arsenax Severus - T3 Ambush
         private const uint Ambusher       = 17954u; // Dominion Ambusher - T3 Ambush
 
+        private const uint AyitaCall       = 444062u; // communicator: "Greetings, friends! I've made contact with someone who can... help..."
         private const uint VesnaWarning    = 454706u; // communicator: "I don't need to tell you how suspicious that call sounded..."
         private const uint AyitaSorry      = 458771u; // "I'm so sorry. They made me call you here!" (chat + communicator)
         private const uint ArsenaxSilence  = 458781u; // "Silence! You played your part. Now watch your fellow conspirators die!"
@@ -51,32 +53,47 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint CryingEmote = 292u;
         private static readonly TimeSpan CryingResend = TimeSpan.FromSeconds(5);
 
-        // Arsenax appears just behind her (retail video: 1-2 m)
-        private const float ArsenaxBehind = 1.5f;
-        // out of reach until the last wave is dead: a faction friendly to the players, the Dominion one when he joins
-        private const Faction OutOfReachFaction = (Faction)219;
+        // Arsenax appears at his spot just behind her, and his facing (Teun, measured in game 1 Oct 2026, 14:30)
+        private static readonly Vector3 ArsenaxSpot = new(-2400.1987f, -904.2949f, -1779.9691f);
+        private const float ArsenaxFacing = -2.201288f;
+        // he is hostile (red, as in retail) from the moment he appears, 4 s after the talk and before the first wave (Teun,
+        // 1 Oct 2026); players keep away from him (retail video; his AI attacks whoever comes within 15 m). He joins the
+        // fight himself once the last wave is dead. His line comes 1.5 s after he appears, well after Ayita's communicator
+        private static readonly TimeSpan ArsenaxAppearDelay = TimeSpan.FromSeconds(4);
+        private const float SpawnLift = 0.3f;
+        private const float AggroRange = 15f;   // CombatAI's range check
         private const Faction DominionFaction = (Faction)1452;
 
         // waves: four of six Ambushers, each as two groups of three at two different spots of the fight; the spots are the
-        // retail clusters of Ambusher sightings (Jabbithole), picked at random per wave (they may well have been random)
+        // retail clusters of Ambusher sightings (Jabbithole), picked at random per wave (they may well have been random).
+        // All of them are on the ground below the raised meeting platform (builder surface.py: terrain -910.5 / -907,
+        // platform -904.1), so the Ambushers are grounded
         private const int WaveCount = 4;
         private const int GroupSize = 3;
         private static readonly Vector2[] AmbushSpots =
         [
-            new(-2379f, -1758f), new(-2391f, -1753f), new(-2378f, -1769f), new(-2372f, -1780f), new(-2410f, -1761f)
+            new(-2379f, -1758f), new(-2391f, -1753f), new(-2378f, -1769f), new(-2372f, -1780f),
+            new(-2368.87f, -1765.43f)   // moved from (-2410, -1761), Teun in the builder 1 Oct 2026
         ];
-        private static readonly TimeSpan FirstWaveDelay = TimeSpan.FromSeconds(4);
+        private static readonly TimeSpan FirstWaveDelay = TimeSpan.FromSeconds(6);   // 2 s after Arsenax appears
         private static readonly TimeSpan WaveDelay = TimeSpan.FromSeconds(3);
         private static readonly TimeSpan ArsenaxJoinDelay = TimeSpan.FromSeconds(4);
 
         // Arsenax leaves after this long in the fight or at this much health, whichever comes first, and runs into the city
         private static readonly TimeSpan ArsenaxFightTime = TimeSpan.FromSeconds(30);
-        private const float ArsenaxLeaveHealth = 0.5f;
-        private const float RunSpeed = 8f;
-        private static readonly Vector3[] ArsenaxRunPath =
-        [
-            new(-2392f, -904f, -1800f), new(-2385f, -904f, -1830f), new(-2378f, -904f, -1860f)
-        ];
+        // his health stops there (ArsenaxAmbushEntityScript): he can't be beaten, he leaves
+        private const float ArsenaxLeaveHealth = ArsenaxAmbushEntityScript.HealthFloor;
+        // down the stairs on the east side of the meeting spot (builder pipeline/surface.py: a ramp from -904.1 to -907.0),
+        // then over the ground: a straight line from up there to the spline sank slowly and floated over the ground
+        private static readonly Vector3[] ArsenaxStairs = [new(-2396.5f, -904.14f, -1779.5f), new(-2392.5f, -907.0f, -1779.5f)];
+        // where the slope below the stairs meets the flat field (surface.py: -910.5 from x -2386 on, plain terrain)
+        private static readonly Vector3 ArsenaxFieldSpot = new(-2384f, -910.5f, -1779.5f);
+        // a point on the terrain every 1.5 m, also between the spline's nodes (15-20 m apart on a curving slope): 4 m steps
+        // and the bare nodes left him up to 0.7 m above or in the ground (builder surface.py check, 1 Oct 2026)
+        private const float GroundStep = 1.5f;
+        // his escape (Teun, 1 Oct 2026): straight to the start of retail spline 14790 in the field, then along it (136 m)
+        // to a gate of the city, where he is gone at its last node
+        private const ushort ArsenaxEscapeSpline = 14790;
 
         private static readonly TimeSpan AyitaStandDelay = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan MissionEndDelay = TimeSpan.FromSeconds(6);
@@ -132,7 +149,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         public override void OnLoad(IPublicEvent owner)
         {
             base.OnLoad(owner);
-            actionQueue.Enqueue(TimeSpan.FromSeconds(2), () => Communicator(VesnaWarning, VesnaTaranoft));
+            // Ayita's call that sets up the meeting, then Vesna's warning about it; far enough apart that the client shows
+            // both (two communicators 1.5 s apart lost the second)
+            actionQueue.Enqueue(TimeSpan.FromSeconds(2), () => Communicator(AyitaCall, AyitaSinnatus));
+            actionQueue.Enqueue(TimeSpan.FromSeconds(11), () => Communicator(VesnaWarning, VesnaTaranoft));
         }
 
         /// <summary>
@@ -201,7 +221,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 return;
 
             cryingTimer = CryingResend.TotalSeconds;
-            if (mapInstance.GetEntity<IWorldEntity>(ayitaGuid) is { InWorld: true } ayita)
+            if (publicEvent.HasFinished)
+                crying = false;
+            else if (mapInstance.GetEntity<IWorldEntity>(ayitaGuid) is { InWorld: true, CreatureId: AyitaMeeting } ayita)
                 ayita.EnqueueToVisible(new ServerEmote
                 {
                     Guid       = ayita.Guid,
@@ -243,20 +265,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             dialogue.Say(ayita, AyitaSorry, false);
             Communicator(AyitaSorry, AyitaSinnatus);
-
-            // just behind her, seen from the players
-            IPlayer player = mapInstance.GetPlayers().OrderBy(p => Vector3.Distance(p.Position, ayita.Position)).FirstOrDefault();
-            Vector3 away = Flat(ayita.Position - (player?.Position ?? ayita.Position + Vector3.UnitZ));
-            arsenax = Spawn(ArsenaxSeverus, ayita.Position + away * ArsenaxBehind, ayita.Position, OutOfReachFaction);
-
-            actionQueue.Enqueue(TimeSpan.FromSeconds(1.5), () =>
-            {
-                if (arsenax is { InWorld: true })
-                {
-                    dialogue.Say(arsenax, ArsenaxSilence, false);
-                    Communicator(ArsenaxSilence, ArsenaxSeverus);
-                }
-            });
+            actionQueue.Enqueue(ArsenaxAppearDelay, AppearArsenax);
 
             publicEvent.ActivateObjective(SurviveAmbush);
             // only the ambush counts: the fields' scouts and spotlights close by aren't part of it
@@ -269,6 +278,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             stage      = Stage.Waves;
             stageTimer = FirstWaveDelay.TotalSeconds;
             log.LogInformation("Hycrest: Breach of Protocol, the trap springs.");
+        }
+
+        /// <summary>
+        /// Arsenax appears at his spot behind Ayita, hostile, and has his say.
+        /// </summary>
+        private void AppearArsenax()
+        {
+            if (publicEvent.HasFinished || stage is not (Stage.Waves or Stage.ArsenaxJoining) || arsenax != null)
+                return;
+
+            // red from the start (retail), but out of reach until he joins: he can't be attacked and notices nobody (his AI
+            // uses a 15 m range check). Then a normal enemy: he fights and chases like the Ambushers (a chase follows the
+            // player's own grounded position, so it takes the steps fine). Spawned 0.3 m above his measured spot, to see how
+            // the client puts him down (test, Teun 1 Oct 2026)
+            arsenax = Spawn(ArsenaxSeverus, ArsenaxSpot + new Vector3(0f, SpawnLift, 0f), Ahead(ArsenaxSpot, ArsenaxFacing),
+                DominionFaction, grounded: false);
+            SetOutOfReach(arsenax, true);
+            actionQueue.Enqueue(TimeSpan.FromSeconds(1.5), () =>
+            {
+                if (arsenax is { InWorld: true })
+                {
+                    dialogue.Say(arsenax, ArsenaxSilence, false);
+                    Communicator(ArsenaxSilence, ArsenaxSeverus);
+                }
+            });
+            log.LogInformation("Hycrest: Breach of Protocol, Arsenax appears.");
         }
 
         private void UpdateWaves(double lastTick)
@@ -306,7 +341,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 for (int i = 0; i < GroupSize; i++)
                 {
                     float angle = MathF.Tau * i / GroupSize;
-                    Vector3 position = Grounded(new Vector3(spot.X + MathF.Cos(angle) * 2f, 0f, spot.Y + MathF.Sin(angle) * 2f));
+                    var position = new Vector3(spot.X + MathF.Cos(angle) * 2f, 0f, spot.Y + MathF.Sin(angle) * 2f);
                     IUnitEntity ambusher = Spawn(Ambusher, position, ArsenaxPosition(), null);
                     if (ambusher != null)
                         wave.Add(ambusher);
@@ -338,13 +373,34 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 return;
             }
 
-            arsenax.SetFaction(DominionFaction);
-            publicEvent.AddObjectiveTarget(SurviveAmbush, arsenax);
-            Engage(arsenax);
-            Bark(arsenax, enterCombat: true);
+            // the last wave is dead: still out of reach he runs down the stairs and the slope into the field, and only there
+            // becomes a normal enemy (Teun, 1 Oct 2026). A chase from up there is a straight line to the player over the
+            // slope (air-walking); from the flat field it follows the player's grounded position like the Ambushers
+            double engageAfter = 0d;
+            if (IsAtMeetingSpot(arsenax))
+            {
+                List<Vector3> down = [arsenax.Position, .. ArsenaxStairs, .. OverGround(ArsenaxStairs[^1], ArsenaxFieldSpot, 1f),
+                    Grounded(ArsenaxFieldSpot)];
+                float speed = RunSpeedOf(arsenax);
+                arsenax.MovementManager.SetMode(ModeType.Walk);
+                arsenax.MovementManager.LaunchSpline(down, SplineType.Linear, SplineMode.OneShot, speed);
+                engageAfter = PathLength(down) / speed;
+            }
+
+            IUnitEntity joining = arsenax;
+            actionQueue.Enqueue(TimeSpan.FromSeconds(engageAfter), () =>
+            {
+                if (!joining.InWorld || !joining.IsAlive)
+                    return;
+
+                SetOutOfReach(joining, false);
+                publicEvent.AddObjectiveTarget(SurviveAmbush, joining);
+                Engage(joining);
+                Bark(joining, enterCombat: true);
+            });
 
             stage      = Stage.ArsenaxFighting;
-            stageTimer = ArsenaxFightTime.TotalSeconds;
+            stageTimer = ArsenaxFightTime.TotalSeconds + engageAfter;
             log.LogInformation("Hycrest: Breach of Protocol, Arsenax joins the fight.");
         }
 
@@ -358,24 +414,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             // he leaves before he can be beaten and counts as defeated
             stage = Stage.Ending;
             dialogue.Say(arsenax, ArsenaxLeaves, false);
-            arsenax.SetFaction(OutOfReachFaction);
-            arsenax.ThreatManager.ClearThreatList();
+            SetOutOfReach(arsenax, true);
 
-            List<Vector3> path = [arsenax.Position, .. ArsenaxRunPath.Select(Grounded)];
-            float length = 0f;
-            for (int i = 1; i < path.Count; i++)
-                length += Vector3.Distance(path[i - 1], path[i]);
-
+            // at once, in this tick: clearing his threat (SetOutOfReach) makes his combat AI reset, which sends him walking
+            // back home to his spawn spot; the path launched last in a tick is the one the client gets (a second later he
+            // first walked back to the stairs, 1 Oct 2026)
             IUnitEntity runner = arsenax;
-            actionQueue.Enqueue(TimeSpan.FromSeconds(1), () =>
-            {
-                if (!runner.InWorld)
-                    return;
-
-                runner.MovementManager.SetMode(ModeType.Walk);
-                runner.MovementManager.LaunchSpline(path, SplineType.Linear, SplineMode.OneShot, RunSpeed);
-            });
-            actionQueue.Enqueue(TimeSpan.FromSeconds(1 + length / RunSpeed), () =>
+            List<Vector3> path = EscapePath(runner);
+            float runSpeed = RunSpeedOf(runner);
+            runner.MovementManager.SetMode(ModeType.Walk);
+            runner.MovementManager.LaunchSpline(path, SplineType.Linear, SplineMode.OneShot, runSpeed);
+            actionQueue.Enqueue(TimeSpan.FromSeconds(PathLength(path) / runSpeed), () =>
             {
                 if (runner.InWorld)
                     runner.RemoveFromMap();
@@ -425,7 +474,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private Vector3 ArsenaxPosition()
         {
-            return arsenax?.Position ?? Vector3.Zero;
+            return arsenax?.Position ?? ArsenaxSpot;
         }
 
         private void Engage(IUnitEntity unit)
@@ -465,7 +514,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 storyBuilder.SendStoryCommunicator(textId, creatureId, player);
         }
 
-        private IUnitEntity Spawn(uint creatureId, Vector3 position, Vector3 facing, Faction? faction)
+        private IUnitEntity Spawn(uint creatureId, Vector3 position, Vector3 facing, Faction? faction, bool grounded = true)
         {
             ICreatureInfo creatureInfo = creatureInfoManager.GetCreatureInfo(creatureId);
             if (creatureInfo == null)
@@ -482,8 +531,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             Vector3 direction = Flat(facing - position);
             entity.Rotation = new Vector3(MathF.Atan2(-direction.X, -direction.Z), 0f, 0f);
 
-            entity.AddToMap(mapInstance, Grounded(position));
+            entity.AddToMap(mapInstance, grounded ? Grounded(position) : position);
             return entity;
+        }
+
+        /// <summary>
+        /// Points every <see cref="GroundStep"/> metres from <paramref name="from"/> to <paramref name="to"/> (both left out),
+        /// on the terrain, so a unit running between them follows the ground.
+        /// </summary>
+        private IEnumerable<Vector3> OverGround(Vector3 from, Vector3 to, float step = GroundStep)
+        {
+            int steps = (int)(Vector3.Distance(from, to) / step);
+            for (int i = 1; i < steps; i++)
+                yield return Grounded(Vector3.Lerp(from, to, (float)i / steps));
         }
 
         private Vector3 Grounded(Vector3 position)
@@ -492,6 +552,94 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             if (height.HasValue)
                 position.Y = height.Value;
             return position;
+        }
+
+        /// <summary>
+        /// Return true if <paramref name="unit"/> is up on the raised meeting spot (above the foot of its stairs, near his spot).
+        /// </summary>
+        /// <summary>
+        /// Arsenax's way out from where he is right now: down the stairs if he is still up at the meeting spot, over the
+        /// ground to the nearest node of spline 14790 (not back to its start), then along the rest of it.
+        /// </summary>
+        /// <remarks>
+        /// The movement manager's position, not the entity's: during a chase that lags, and the escape started from where
+        /// his descent had ended, so he first walked back to the foot of the stairs (1 Oct 2026).
+        /// </remarks>
+        private List<Vector3> EscapePath(IUnitEntity unit)
+        {
+            Vector3 from = unit.MovementManager.GetPosition();
+            Vector3[] spline = GetSplineNodes(ArsenaxEscapeSpline);
+            List<Vector3> path = [from];
+            if (IsAtMeetingSpot(from))
+                path.AddRange(ArsenaxStairs);
+
+            int first = 0;
+            for (int i = 1; i < spline.Length; i++)
+                if (Vector3.Distance(path[^1], spline[i]) < Vector3.Distance(path[^1], spline[first]))
+                    first = i;
+
+            path.AddRange(OverGround(path[^1], spline[first]));
+            for (int i = first; i < spline.Length; i++)
+            {
+                path.Add(spline[i]);
+                if (i + 1 < spline.Length)
+                    path.AddRange(OverGround(spline[i], spline[i + 1]));
+            }
+            return path;
+        }
+
+        /// <summary>
+        /// Out of reach: can't be attacked, notices nobody and drops what it was fighting; or back to a normal enemy.
+        /// </summary>
+        private static void SetOutOfReach(IUnitEntity unit, bool outOfReach)
+        {
+            if (unit == null)
+                return;
+
+            unit.IsInvulnerable = outOfReach;
+            unit.SetInRangeCheck(outOfReach ? 0f : AggroRange);
+            if (outOfReach)
+                unit.ThreatManager.ClearThreatList();
+        }
+
+        private static bool IsAtMeetingSpot(IUnitEntity unit)
+        {
+            return IsAtMeetingSpot(unit.MovementManager.GetPosition());
+        }
+
+        private static bool IsAtMeetingSpot(Vector3 position)
+        {
+            return position.Y > ArsenaxStairs[^1].Y + 1f && Vector3.Distance(position, ArsenaxSpot) < 10f;
+        }
+
+        /// <summary>
+        /// A speed the client shows as a run: the unit's move speed x 8 (as chasing units) x its model scale. A bigger model
+        /// covers more ground per step: Arsenax (scale 1.3) still walked at 8 m/s, the farmers (1.07) run at 8 (HYCREST.md
+        /// "How to: make a scripted NPC run").
+        /// </summary>
+        private static float RunSpeedOf(IUnitEntity unit)
+        {
+            float scale = unit.CreatureInfo?.Entry.ModelScale ?? 1f;
+            if (scale <= 0f)
+                scale = 1f;
+            float speed = unit.GetPropertyValue(Property.MoveSpeedMultiplier) * 8f * scale;
+            return speed > 0f ? speed : 8f;
+        }
+
+        private static float PathLength(List<Vector3> path)
+        {
+            float length = 0f;
+            for (int i = 1; i < path.Count; i++)
+                length += Vector3.Distance(path[i - 1], path[i]);
+            return length;
+        }
+
+        /// <summary>
+        /// Return a point 1 m in front of <paramref name="position"/> for a unit with <paramref name="rotation"/>, to face it.
+        /// </summary>
+        private static Vector3 Ahead(Vector3 position, float rotation)
+        {
+            return position + new Vector3(-MathF.Sin(rotation), 0f, -MathF.Cos(rotation));
         }
 
         private static Vector3 Flat(Vector3 direction)

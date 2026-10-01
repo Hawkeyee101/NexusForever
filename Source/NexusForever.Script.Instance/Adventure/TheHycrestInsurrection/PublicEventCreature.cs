@@ -12,6 +12,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         ExitSimulation    = 36869,
         TheCaretaker      = 53309,
         CaretakerHologram = 56685,
-        BarnDoor          = 51064
+        BarnDoor          = 51064,
+        FarmhouseDoor     = 51065
     }
 }

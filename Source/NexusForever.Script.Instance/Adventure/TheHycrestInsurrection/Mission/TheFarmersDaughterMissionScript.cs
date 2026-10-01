@@ -337,6 +337,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint HostileFaction = 1452u;
 
         /// <summary>
+        /// Invoked when the hideout's door closes after the mission: the guards are gone, forget their guids (reused).
+        /// </summary>
+        public override void OnHideoutClosed()
+        {
+            base.OnHideoutClosed();
+            millitheaGuards.Clear();
+        }
+
+        /// <summary>
         /// Return true if <paramref name="entity"/> stays in the world after the mission.
         /// </summary>
         protected override bool KeepAfterMission(IGridEntity entity)

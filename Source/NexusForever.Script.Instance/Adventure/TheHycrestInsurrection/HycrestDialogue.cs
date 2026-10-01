@@ -87,12 +87,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// barn (Lysion's first briefing line never arrived, while his talk emote, sent to the players that can see him, did).
         /// A bubble needs the unit on the client anyway, so the visible players are the right audience.
         /// </remarks>
-        private void SendSay(IWorldEntity speaker, string text)
+        private void SendSay(IWorldEntity speaker, string text, ChatChannelType channel = ChatChannelType.NPCSay)
         {
             Creature2Entry creature = gameTableManager.Creature2.GetEntry(speaker.CreatureId);
             speaker.EnqueueToVisible(new ServerChat
             {
-                Channel   = new Channel { ChatChannelId = ChatChannelType.NPCSay },
+                Channel   = new Channel { ChatChannelId = channel },
                 From      = new Identity(),
                 FromName  = creature != null ? gameTableManager.TextEnglish.GetEntry(creature.LocalizedTextIdName) ?? string.Empty : string.Empty,
                 FromRealm = string.Empty,
@@ -102,14 +102,18 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         }
 
         /// <summary>
-        /// Chatter shown only as a speech bubble in retail (e.g. families on the run), not in the chat.
+        /// Chatter shown only as a speech bubble in retail (e.g. families on the run, combat barks), not in the chat.
         /// </summary>
         /// <remarks>
-        /// How retail sends a bubble without a chat line isn't known yet; until then it is a normal NPC say.
+        /// Sent on the Say channel: from an NPC the client shows it as a bubble without a chat line (Teun's channel test with
+        /// `!npc say`, 1 Oct 2026: NPCSay shows both, Debug shows a bubble marked "debug", Say only the bubble).
         /// </remarks>
         public void Bark(IWorldEntity speaker, uint textId)
         {
-            Say(speaker, textId, false);
+            if (speaker?.Map == null)
+                return;
+
+            SendSay(speaker, GetText(textId), ChatChannelType.Say);
         }
 
         /// <summary>

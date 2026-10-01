@@ -35,6 +35,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         }
 
         /// <summary>
+        /// Invoked when the hideout's door closes after the mission: the units go, and so do their walks and lanes (a
+        /// finished mission's script keeps updating, and their guids get reused).
+        /// </summary>
+        public override void OnHideoutClosed()
+        {
+            base.OnHideoutClosed();
+            walks.Clear();
+            spotlights.Clear();
+        }
+
+        /// <summary>
         /// Start a scout's patrol or a spotlight's lane; returns true if <paramref name="worldEntity"/> was one of them.
         /// </summary>
         protected bool OnAddFieldUnit(IWorldEntity worldEntity)
@@ -90,61 +101,50 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const float SpotlightTrackSpeed = 3.5f;
         private const float SpotlightReturnSpeed = 4f;
         private static readonly TimeSpan SpotlightRetrackInterval = TimeSpan.FromSeconds(0.5);
-        // patrolling scouts: spawn position (first node) and the route they walk back and forth
-        private static readonly Vector3[][] Patrols =
-        [
-            [new(-2451.276f, -927.9198f, -1214.2766f), new(-2463.5671f, -927.2098f, -1194.4918f), new(-2452.616f, -925.6125f, -1181.2755f)],
-            [new(-2452.7524f, -928.83093f, -1555.9928f), new(-2438.631f, -929.44073f, -1579.1681f)],
-            [new(-2381.129f, -923.09406f, -1698.4329f), new(-2348.2769f, -923.348f, -1698.5614f)]
-        ];
+        // hand-made routes for units without a table spline: spawn position (first node) and the route walked there and
+        // back. Empty for now: the scouts stand at their retail spots and every spotlight follows a table spline; the
+        // earlier scout patrols and spotlight #1's lane are kept in docs/hycrest/legacy/field-routes.md
+        private static readonly Vector3[][] Patrols = [];
+        private static readonly Vector3[][] SpotlightLanes = [];
 
-        // spotlight lanes: spawn position and the other end
-        private static readonly Vector3[][] SpotlightLanes =
-        [
-            // spotlight #1: retail's route is spline 4652 (144 m, through both measured ends), its nodes
-            [
-                new(-2484.1101f, -927.7783f, -1283.1149f), new(-2484.8843f, -927.7318f, -1284.6288f),
-                new(-2490.4890f, -926.6211f, -1298.0022f), new(-2482.0344f, -925.7733f, -1303.0613f),
-                new(-2473.4773f, -924.9636f, -1308.0686f), new(-2479.3337f, -924.8614f, -1316.9690f),
-                new(-2488.3630f, -925.0337f, -1322.9110f), new(-2495.7810f, -925.3270f, -1331.1594f),
-                new(-2502.4685f, -925.7537f, -1342.2825f), new(-2510.4031f, -926.6979f, -1356.2328f),
-                new(-2523.5139f, -927.9279f, -1365.8789f), new(-2536.1279f, -929.4191f, -1371.1870f),
-                new(-2542.7739f, -929.5908f, -1384.3730f), new(-2540.9487f, -929.5251f, -1385.4309f)
-            ],
-        ];
-
-        // the other spotlights patrol table loop splines around the three captive areas (retail: archived Jabbithole
-        // spotlight positions lie around all three, whichever layout; spline groups of five small loops each)
+        // the spotlights patrol table splines around the three captive areas (retail: archived Jabbithole spotlight
+        // positions lie around all three, whichever layout; spline groups of five small loops each)
         private static readonly ushort[] SpotlightSplines =
         [
             7960, 7961, 7962, 7963, 7964,  // layout A area
             7950, 7952, 7954, 7956, 7959,  // layout B area
-            7932, 7933, 7934, 7935         // layout C area (with #1 above)
+            7932, 7933, 7934, 7935,        // layout C area
+            4652                           // spotlight #1 (144 m, through both measured ends of its lane)
         ];
         private readonly Dictionary<uint, Spotlight> spotlights = [];
         private Vector3[][] splineLanes;
 
         /// <summary>
-        /// The nodes of the <see cref="SpotlightSplines"/>, without repeated control points.
+        /// The nodes of the <see cref="SpotlightSplines"/>.
         /// </summary>
         private Vector3[][] GetSplineLanes()
         {
             return splineLanes ??= SpotlightSplines
-                .Select(id =>
-                {
-                    var nodes = new List<Vector3>();
-                    foreach (Spline2NodeEntry node in gameTableManager.Spline2Node.Entries
-                        .Where(n => n.SplineId == id)
-                        .OrderBy(n => n.Ordinal))
-                    {
-                        var position = new Vector3(node.Position0, node.Position1, node.Position2);
-                        if (nodes.Count == 0 || Vector3.Distance(nodes[^1], position) > 0.05f)
-                            nodes.Add(position);
-                    }
-                    return nodes.ToArray();
-                })
+                .Select(GetSplineNodes)
                 .Where(n => n.Length > 1)
                 .ToArray();
+        }
+
+        /// <summary>
+        /// Return the nodes of table spline <paramref name="splineId"/> in order, without repeated control points.
+        /// </summary>
+        protected Vector3[] GetSplineNodes(ushort splineId)
+        {
+            var nodes = new List<Vector3>();
+            foreach (Spline2NodeEntry node in gameTableManager.Spline2Node.Entries
+                .Where(n => n.SplineId == splineId)
+                .OrderBy(n => n.Ordinal))
+            {
+                var position = new Vector3(node.Position0, node.Position1, node.Position2);
+                if (nodes.Count == 0 || Vector3.Distance(nodes[^1], position) > 0.05f)
+                    nodes.Add(position);
+            }
+            return nodes.ToArray();
         }
 
         /// <summary>
@@ -168,6 +168,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private class Walk
         {
+            public uint CreatureId;
             public List<Vector3> Loop;
             public List<Vector3> Nodes;
             public float Speed;
@@ -212,6 +213,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             walks[entity.Guid] = new Walk
             {
+                CreatureId = entity.CreatureId,
                 Loop      = loop,
                 Nodes     = nodes,
                 Speed     = speed,
@@ -224,8 +226,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         {
             foreach ((uint guid, Walk walk) in walks.ToList())
             {
+                // the walker may be gone and its guid reused: only the unit that started the walk
                 IWorldEntity entity = mapInstance.GetEntity<IWorldEntity>(guid);
-                if (entity == null || entity is IUnitEntity { IsAlive: false })
+                if (entity == null || entity.CreatureId != walk.CreatureId || entity is IUnitEntity { IsAlive: false })
                 {
                     walks.Remove(guid);
                     continue;
@@ -410,7 +413,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         {
             foreach ((uint guid, Spotlight state) in spotlights)
             {
-                if (mapInstance.GetEntity<IWorldEntity>(guid) is not IUnitEntity spotlight)
+                // a removed spotlight's guid can belong to another unit by now (it moved Vesna in a later hideout)
+                if (mapInstance.GetEntity<IWorldEntity>(guid) is not IUnitEntity { CreatureId: SpotlightTarget } spotlight)
                     continue;
 
                 UpdateSpotlightMovement(spotlight, state, lastTick);

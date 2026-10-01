@@ -108,6 +108,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private IPublicEvent regroup;
 
         // the run so far: the tier of the current mission and the track chosen on each tier
+        // TEMPORARY dev shortcut (Teun, 1 Oct 2026, to speed up testing; not for upstream): a fresh instance skips the intro
+        // and starts straight in this mission, as if the route before it was played, and moves joining players to
+        // DevStartSpot. 0 = the normal run. The tracks below lead to Breach of Protocol (Farmer's Daughter, Keymaster)
+        private const uint DevStartMission = 0u;
+        private static readonly HycrestTrack[] DevStartTracks = [HycrestTrack.Merciful, HycrestTrack.Tactical];
+        private static readonly Vector3 DevStartSpot = new(-2389f, -906.5f, -1779.5f);   // foot of the meeting spot's stairs
+        private static readonly TimeSpan DevTeleportDelay = TimeSpan.FromSeconds(4);
+        private readonly HashSet<ulong> devTeleported = [];
+
         private int tier = -1;
         private readonly HycrestTrack[] tracks = new HycrestTrack[HycrestMissions.TierCount];
 
@@ -122,9 +131,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             [HycrestMissions.RegroupArcwulffFarm] = 13u
         };
 
-        // guests at a hideout (retail video, Arcwulff Farm after Breach of Protocol: Millithea, Prema and Tarquim): they
+        // guests at a hideout (Arcwulff Farm after Breach of Protocol: Prema; Tarquim and Millithea are in no video): they
         // leave when its door closes
-        private static readonly HashSet<uint> HideoutGuests = [49490u, 17772u, 17773u];
+        private static readonly HashSet<uint> HideoutGuests = [17772u];
         private readonly List<uint> hideoutGuests = [];
 
         // the sky once everyone is in the hideout (retail video: back to daylight when Arcwulff Farm closes after Breach
@@ -161,13 +170,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly Dictionary<uint, uint> BarnDoorPhases = new()
         {
             [HycrestMissions.RegroupAbandonedBarn] = 20u,
-            [HycrestMissions.RegroupSinnatusBarn]  = 21u
+            [HycrestMissions.RegroupSinnatusBarn]  = 21u,
+            [HycrestMissions.RegroupArcwulffFarm]  = 22u  // the farmhouse door (Farmhouse Door - Platform 51065)
         };
 
         // the doors open once the mission after a vote has everything on the map (any layout): all its spawns added
         private IPublicEvent openDoorsFor;
         // at least this long after the mission appears (and once its spawns are all on the map)
         private static readonly TimeSpan MinDoorOpenDelay = TimeSpan.FromSeconds(2);
+        // the first barn (after vote 45) opens sooner again, as at first: its door vanishing was guid reuse (fixed), not
+        // the timing (Teun, 1 Oct 2026)
+        private static readonly TimeSpan FirstBarnDoorOpenDelay = TimeSpan.FromSeconds(1);
         private double openDoorsWait;
         // a door that has just closed stays closed at least this long (after The Great Escape the next mission follows
         // right away, the door reopened the moment it closed)
@@ -214,8 +227,29 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // spawns Vesna Taranoft and Ayita Sinnatus in the Abandoned Barn
             publicEvent.SetPhase(0u);
 
+            if (DevStartMission != 0u)
+            {
+                DevStart();
+                return;
+            }
+
             // the intro is a separate root event, players are joined to it by the map script
             publicEvent.Map.PublicEventManager.CreateEvent(HycrestPublicEvent.Intro);
+        }
+
+        /// <summary>
+        /// TEMPORARY dev shortcut, see <see cref="DevStartMission"/>.
+        /// </summary>
+        private void DevStart()
+        {
+            if (!HycrestMissions.TryGetTierAndTrack(DevStartMission, out int devTier, out _))
+                return;
+
+            for (int i = 0; i < devTier && i < DevStartTracks.Length; i++)
+                tracks[i] = DevStartTracks[i];
+            skySpell = NightSkySpell;
+            sceneQueue.Enqueue(TimeSpan.Zero, () => StartMission(DevStartMission));
+            log.LogWarning($"Hycrest: DEV START at mission {DevStartMission} (TheHycrestInsurrectionEventScript.DevStartMission), no intro.");
         }
 
         /// <summary>
@@ -230,6 +264,27 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             sceneClock += lastTick;
             sceneQueue.Update(lastTick);
             UpdateBarnDoors(lastTick);
+            UpdateSeated(lastTick);
+        }
+
+        // Ayita sits wherever she is (hay bales, hideouts). The sit goes out again now and then, like Breach's crying: in the
+        // Arcwulff farmhouse she was seen standing (1 Oct 2026), though nothing in the scripts stands her up
+        private static readonly TimeSpan SitResend = TimeSpan.FromSeconds(5);
+        private double sitTimer;
+
+        private void UpdateSeated(double lastTick)
+        {
+            sitTimer -= lastTick;
+            if (sitTimer > 0d)
+                return;
+
+            sitTimer = SitResend.TotalSeconds;
+            if (!npcGuids.TryGetValue(PublicEventCreature.AyitaSinnatus, out List<uint> guids))
+                return;
+
+            foreach (uint guid in guids)
+                if (mapInstance.GetEntity<IWorldEntity>(guid) is { InWorld: true, CreatureId: (uint)PublicEventCreature.AyitaSinnatus } ayita)
+                    ayita.StandState = StandState.Sit;
         }
 
         private void UpdateBarnDoors(double lastTick)
@@ -241,7 +296,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             openDoorsWait += lastTick;
             // never before the new time of day is set, nor before the mission has everything on the map
             if (timeOfDayPending
-                || openDoorsWait < MinDoorOpenDelay.TotalSeconds
+                || openDoorsWait < (HycrestMissions.TryGetTierAndTrack(openDoorsFor.Id, out int tier, out _) && tier == 0
+                    ? FirstBarnDoorOpenDelay : MinDoorOpenDelay).TotalSeconds
                 || sceneClock - doorClosedAt < MinDoorClosedTime.TotalSeconds
                 || !openDoorsFor.HasFinished && openDoorsFor.GetEntities().Any(e => !e.InWorld))
                 return;
@@ -268,6 +324,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     {
                         HycrestPublicEvent.JoinPublicTeam(regroup, player);
                         UpdateRegroupParticipants();
+                    }
+
+                    // TEMPORARY dev shortcut: once per player, to the start of the mission
+                    if (DevStartMission != 0u && devTeleported.Add(player.CharacterId))
+                    {
+                        uint devGuid = player.Guid;
+                        sceneQueue.Enqueue(DevTeleportDelay, () =>
+                        {
+                            if (mapInstance.GetEntity<IPlayer>(devGuid) is IPlayer joined && joined.CanTeleport())
+                                joined.TeleportToLocal(DevStartSpot, false);
+                        });
                     }
 
                     if (skySpell.HasValue)
@@ -313,6 +380,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     AddNpc(creature, worldEntity.Guid);
                     break;
                 case PublicEventCreature.BarnDoor:
+                case PublicEventCreature.FarmhouseDoor:
                     // spawned by CloseBarnDoor, removed by OpenBarnDoors
                     barnDoors.Add(worldEntity.Guid);
                     break;
