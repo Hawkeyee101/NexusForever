@@ -11,7 +11,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
     /// <remarks>
     /// Remove a mission's id here once it has its own script.
     /// </remarks>
-    [ScriptFilterOwnerId(421u, 422u, 424u, 425u, 426u, 427u, 428u, 429u, 430u, 431u, 432u, 433u, 434u)]
+    [ScriptFilterOwnerId(421u, 422u, 424u, 425u, 427u, 428u, 429u, 430u, 431u, 432u, 433u, 434u)]
     public class HycrestMissionStubScript : HycrestMissionScript
     {
         #region Dependency Injection

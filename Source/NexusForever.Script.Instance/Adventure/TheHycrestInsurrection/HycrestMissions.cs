@@ -128,7 +128,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             [423u] = RegroupAbandonedBarn, // retail video: its last objective returns to the (empty) barn
             [424u] = RegroupAyitasTavern,
             [425u] = RegroupArcwulffFarm,
-            [426u] = RegroupAbandonedBarn,
+            [426u] = RegroupArcwulffFarm, // retail video: "Meet us at the nearby safehouse" (Vesna, 461016)
             [427u] = RegroupAbandonedBarn,
             [428u] = RegroupAbandonedBarn
         };

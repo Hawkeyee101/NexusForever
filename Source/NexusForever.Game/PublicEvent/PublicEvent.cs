@@ -545,12 +545,13 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
-        /// Remove a unit from an active Exterminate objective without counting it as killed.
+        /// Remove a unit from an active Exterminate objective; <paramref name="defeated"/> counts it as killed (e.g. a boss
+        /// who flees), otherwise it no longer counts at all.
         /// </summary>
-        public void RemoveObjectiveTarget(uint objectiveId, uint guid)
+        public void RemoveObjectiveTarget(uint objectiveId, uint guid, bool defeated = false)
         {
             foreach (IPublicEventObjective objective in GetObjectives(objectiveId))
-                objective.OnTargetRemoved(guid, false);
+                objective.OnTargetRemoved(guid, defeated);
         }
 
         private IEnumerable<IPublicEventObjective> GetObjectives(uint objectiveId)

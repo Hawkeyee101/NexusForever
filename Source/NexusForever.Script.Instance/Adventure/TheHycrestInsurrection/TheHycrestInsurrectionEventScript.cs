@@ -51,6 +51,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     (PublicEventCreature.AyitaSinnatus,  464213u), // "Have you two forgotten what we're fighting for?..."
                     (PublicEventCreature.VesnaTaranoft,  464254u), // "We also need the people of Hycrest on our side..."
                     (PublicEventCreature.LysionSinnatus, 464259u)  // "Enough! Neither of those things is of any use..."
+                ]),
+            // Arcwulff Farm after Breach of Protocol (retail video: the vote comes at once, Vesna and Ayita argue during it;
+            // the video stops after Ayita's first line, the rest are the neighbouring ids, order assumed)
+            [48u] = (
+                [],
+                [
+                    (PublicEventCreature.VesnaTaranoft,  464268u), // "Lysion, we can't distribute munitions and supplies we haven't cleared!"
+                    (PublicEventCreature.AyitaSinnatus,  464272u), // "Arming the rebellion can't be our only priority..."
+                    (PublicEventCreature.VesnaTaranoft,  464274u), // "We can't arm the rebellion with weapons we haven't checked..."
+                    (PublicEventCreature.AyitaSinnatus,  464276u), // "Those people need our help!"
+                    (PublicEventCreature.VesnaTaranoft,  464278u)  // "I understand, but our security has to come first..."
                 ])
         };
 
@@ -107,7 +118,20 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // phase of the main event with the NPCs of a hideout, set when the players regroup there
         private static readonly Dictionary<uint, uint> HideoutPhases = new()
         {
-            [HycrestMissions.RegroupSinnatusBarn] = 11u
+            [HycrestMissions.RegroupSinnatusBarn] = 11u,
+            [HycrestMissions.RegroupArcwulffFarm] = 13u
+        };
+
+        // guests at a hideout (retail video, Arcwulff Farm after Breach of Protocol: Millithea, Prema and Tarquim): they
+        // leave when its door closes
+        private static readonly HashSet<uint> HideoutGuests = [49490u, 17772u, 17773u];
+        private readonly List<uint> hideoutGuests = [];
+
+        // the sky once everyone is in the hideout (retail video: back to daylight when Arcwulff Farm closes after Breach
+        // of Protocol)
+        private static readonly Dictionary<uint, uint> SkyAtHideout = new()
+        {
+            [426u] = MorningSkySpell
         };
         private readonly List<uint> barnDoors = [];
 
@@ -275,6 +299,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void OnAddToMapWorldEntity(IWorldEntity worldEntity)
         {
+            if (HideoutGuests.Contains(worldEntity.CreatureId) && publicEvent.GetEntities().Contains(worldEntity))
+            {
+                hideoutGuests.Add(worldEntity.Guid);
+                return;
+            }
+
             var creature = (PublicEventCreature)worldEntity.CreatureId;
             switch (creature)
             {
@@ -648,7 +678,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             // the barn closes: the finished mission's remaining spawns (its enemies) go now
             finishedMission?.InvokeScriptCollection<IHycrestMissionScript>(s => s.OnHideoutClosed());
+            if (finishedMission != null && SkyAtHideout.TryGetValue(finishedMission.Id, out uint sky))
+                SetSky(sky);
             finishedMission = null;
+
+            // the hideout's guests leave with the door
+            foreach (uint guid in hideoutGuests)
+                if (mapInstance.GetEntity<IWorldEntity>(guid) is { InWorld: true } guest)
+                    guest.RemoveFromMap();
+            hideoutGuests.Clear();
 
             CloseBarnDoor(regroupObjective);
             sceneQueue.Enqueue(TimeSpan.Zero, NextTier);

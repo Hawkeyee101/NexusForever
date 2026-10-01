@@ -170,9 +170,10 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void AddObjectiveTarget(uint objectiveId, IUnitEntity unit, bool force = true);
 
         /// <summary>
-        /// Remove a unit from an active Exterminate objective without counting it as killed.
+        /// Remove a unit from an active Exterminate objective; <paramref name="defeated"/> counts it as killed (e.g. a boss
+        /// who flees), otherwise it no longer counts at all.
         /// </summary>
-        void RemoveObjectiveTarget(uint objectiveId, uint guid);
+        void RemoveObjectiveTarget(uint objectiveId, uint guid, bool defeated = false);
 
         /// <summary>
         /// Invoked when a <see cref="IGridEntity"/> is added to the map the public event is on.
