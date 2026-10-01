@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Entity;
@@ -263,6 +263,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             foreach (IGridEntity entity in publicEvent.GetEntities().ToList())
                 if (entity is IUnitEntity unit && unit.CreatureId != Ambusher)
                     publicEvent.RemoveObjectiveTarget(SurviveAmbush, unit.Guid);
+            // the tracker shows all of them from the start (retail video: 25), the waves don't raise it
+            publicEvent.SetObjectiveDynamicMax(SurviveAmbush, (uint)(WaveCount * 2 * GroupSize + 1));
 
             stage      = Stage.Waves;
             stageTimer = FirstWaveDelay.TotalSeconds;

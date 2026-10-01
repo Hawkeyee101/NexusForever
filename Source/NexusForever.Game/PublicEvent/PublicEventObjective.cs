@@ -30,6 +30,8 @@ namespace NexusForever.Game.PublicEvent
         // Exterminate: the units that have to be killed; the count is the number killed, the dynamic max the number of
         // targets so far (units the event spawns while the objective is active are added, e.g. waves)
         private readonly HashSet<uint> targets = [];
+        // a script set the Exterminate total (e.g. every wave known up front): spawning targets no longer raises it
+        private bool dynamicMaxFixed;
 
         // WorldLocation2 points shown for the objective on the map (the area and the minimap marker), like the ones the
         // client takes from the objective's own WorldLocation2 in the tables; most objectives have none there, scripts
@@ -299,6 +301,9 @@ namespace NexusForever.Game.PublicEvent
             if (Status != PublicEventStatus.Active)
                 return;
 
+            if (IsExterminate)
+                dynamicMaxFixed = true;
+
             if (DynamicMax == max)
                 return;
 
@@ -316,6 +321,7 @@ namespace NexusForever.Game.PublicEvent
         {
             targets.Clear();
             Count = 0;
+            dynamicMaxFixed = false;
 
             foreach (IGridEntity entity in Team.PublicEvent.GetEntities())
                 if (entity is IUnitEntity unit && IsTargetCandidate(unit))
@@ -374,7 +380,8 @@ namespace NexusForever.Game.PublicEvent
                 return;
 
             targets.Add(unit.Guid);
-            DynamicMax++;
+            if (!dynamicMaxFixed)
+                DynamicMax++;
             BroadcastObjectiveUpdate();
         }
 
@@ -388,7 +395,7 @@ namespace NexusForever.Game.PublicEvent
 
             if (killed)
                 Count++;
-            else
+            else if (!dynamicMaxFixed)
                 DynamicMax--;
 
             BroadcastObjectiveUpdate();
