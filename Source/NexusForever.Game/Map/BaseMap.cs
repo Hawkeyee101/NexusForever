@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
 using System.Text;
@@ -384,9 +384,10 @@ namespace NexusForever.Game.Map
         /// </summary>
         public T GetEntity<T>(uint guid) where T : IGridEntity
         {
-            if (!entities.TryGetValue(guid, out IGridEntity entity))
+            // a guid can belong to a different kind of entity by now (guids are reused): not found rather than a cast error
+            if (!entities.TryGetValue(guid, out IGridEntity entity) || entity is not T result)
                 return default;
-            return (T)entity;
+            return result;
         }
 
         /// <summary>
