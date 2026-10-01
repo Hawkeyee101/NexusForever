@@ -218,8 +218,10 @@ namespace NexusForever.WorldServer.Command.Handler
             [Parameter("Optional single word to say (default: the channel number).")]
             string text)
         {
-            IPlayer player = context.GetTargetOrInvoker<IPlayer>();
-            IWorldEntity speaker = context.GetTargetOrInvoker<IWorldEntity>();
+            // the invoker hears it, the target speaks (GetTargetOrInvoker<IPlayer> fails on an NPC target)
+            if (context.Invoker is not IPlayer player)
+                return;
+            IWorldEntity speaker = context.Target;
             if (speaker == null || speaker == player)
             {
                 context.SendError("Target an NPC first.");
