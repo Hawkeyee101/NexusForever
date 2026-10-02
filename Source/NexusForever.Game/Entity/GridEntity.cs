@@ -225,7 +225,7 @@ namespace NexusForever.Game.Entity
             // stale entries (keyed by guids of the old map) would stop the new map from sending those guids, including
             // the player's own
             // (both sides through RemoveVisionEntity, so the visibility hooks still fire)
-            foreach ((uint _, IGridEntity entity) in visibleEntities.Concat(invisibleEntities).ToList())
+            foreach ((uint _, IGridEntity entity) in visibleEntities.Concat(invisibleEntities))
             {
                 RemoveVisionEntity(entity);
                 if (entity != this)
