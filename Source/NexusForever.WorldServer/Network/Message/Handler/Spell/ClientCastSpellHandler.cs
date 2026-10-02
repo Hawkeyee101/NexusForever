@@ -14,6 +14,10 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Spell
         /// </summary>
         public void HandleMessage(IWorldSession session, ClientCastSpell castSpell)
         {
+            // a button of the vehicle bar: the caster is the vehicle the player controls, the index is the button's
+            if (VehicleAbility.TryHandle(session.Player, castSpell.CasterId, castSpell.BagIndex, castSpell.ButtonPressed))
+                return;
+
             IItem item = session.Player.Inventory.GetItem(InventoryLocation.Ability, castSpell.BagIndex);
             if (item == null)
                 throw new InvalidPacketValueException();

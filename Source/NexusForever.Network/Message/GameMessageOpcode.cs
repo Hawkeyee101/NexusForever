@@ -13,6 +13,7 @@ namespace NexusForever.Network.Message
         ServerLogoutUpdate              = 0x0092,
         ClientCommodityOrderCancel      = 0x0093,
         ClientAuctionCancel             = 0x0094,
+        ClientCastActionBarSpell        = 0x0096, // name from upstream PR #482; sent by the buttons of a vehicle's action bar (ServerShowActionBar VehicleBar)
         ClientActivateUnitCast          = 0x0097, // not sure about the name - almost the same as 0x00B3, but also initiates 0x07FD
         ClientActivateUnitInteraction   = 0x0098,
         ClientPathExplorerCastSearching = 0x0099,

@@ -21,6 +21,14 @@ namespace NexusForever.Script.Template
         }
 
         /// <summary>
+        /// Invoked when the pilot of this vehicle uses a button of the vehicle's action bar: the client sends a spell cast
+        /// with the vehicle as the caster and the button's index.
+        /// </summary>
+        void OnVehicleAbility(IPlayer pilot, ushort index, bool pressed)
+        {
+        }
+
+        /// <summary>
         /// Invoked when an <see cref="IEntityCommand"/> has finialised for <see cref="IWorldEntity"/>.
         /// </summary>
         void OnEntityCommandFinalise(IEntityCommand command)
