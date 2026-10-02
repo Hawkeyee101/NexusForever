@@ -121,6 +121,10 @@ namespace NexusForever.Script.Main.AI
             if (!entity.TargetGuid.HasValue)
                 return;
 
+            // a turret doesn't move after its target
+            if (entity.IsTurret)
+                return;
+
             IUnitEntity target = entity.Map.GetEntity<IUnitEntity>(entity.TargetGuid.Value);
             if (target == null)
                 return;
@@ -140,6 +144,9 @@ namespace NexusForever.Script.Main.AI
                 return;
 
             if (!entity.TargetGuid.HasValue)
+                return;
+
+            if (entity.IsTurret)
                 return;
 
             entity.MovementManager.SetRotationFaceUnit(entity.TargetGuid.Value);
@@ -190,8 +197,12 @@ namespace NexusForever.Script.Main.AI
             var spellParameters = spellParametersFactory.Resolve();
             entity.CastSpell(41368, spellParameters);
 
-            entity.MovementManager.Finalise();
-            entity.MovementManager.SetRotationFaceUnit(unit.Guid);
+            // a turret keeps its own movement (e.g. riding a vehicle along a path)
+            if (!entity.IsTurret)
+            {
+                entity.MovementManager.Finalise();
+                entity.MovementManager.SetRotationFaceUnit(unit.Guid);
+            }
 
             entity.ThreatManager.UpdateThreat(unit, 1);
         }
@@ -270,6 +281,9 @@ namespace NexusForever.Script.Main.AI
             entity.ModifyHealth(entity.MaxHealth, DamageType.Heal, null);
 
             // TODO: cancel all pending spells
+
+            if (entity.IsTurret)
+                return;
 
             float speed = entity.GetPropertyValue(Property.MoveSpeedMultiplier) * 10f;
             entity.MovementManager.LaunchSpline([entity.Position, entity.LeashPosition], SplineType.Linear, SplineMode.OneShot, speed);

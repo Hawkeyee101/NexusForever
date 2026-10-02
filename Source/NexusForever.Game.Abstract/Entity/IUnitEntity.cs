@@ -131,6 +131,12 @@ namespace NexusForever.Game.Abstract.Entity
         bool IsInvulnerable { get; set; }
 
         /// <summary>
+        /// While set, this <see cref="IUnitEntity"/> fights where it is: combat doesn't move or stop it (no chase, no walk
+        /// home after combat, its own movement goes on), e.g. turrets and guards riding a vehicle.
+        /// </summary>
+        bool IsTurret { get; set; }
+
+        /// <summary>
         /// Returns whether or not this <see cref="IUnitEntity"/> is an attackable target for supplied <see cref="IUnitEntity"/>.
         /// </summary>
         bool IsValidAttackTarget(IUnitEntity attacker);

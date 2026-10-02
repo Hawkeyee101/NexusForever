@@ -511,6 +511,12 @@ namespace NexusForever.Game.Entity
         public bool IsInvulnerable { get; set; }
 
         /// <summary>
+        /// While set, this <see cref="IUnitEntity"/> fights where it is: combat doesn't move or stop it (no chase, no walk
+        /// home after combat, its own movement goes on), e.g. turrets and guards riding a vehicle.
+        /// </summary>
+        public bool IsTurret { get; set; }
+
+        /// <summary>
         /// Deal damage to this <see cref="IUnitEntity"/> from the supplied <see cref="IUnitEntity"/>.
         /// </summary>
         public void TakeDamage(IUnitEntity attacker, IDamageDescription damageDescription)
