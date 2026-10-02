@@ -43,10 +43,33 @@ namespace NexusForever.Game.Entity
         /// </summary>
         public bool InteractionBlocked { get; set; }
 
+        /// <summary>
+        /// Facing in the world. On a platform the movement manager keeps it relative to the platform (as the client sends
+        /// it), like the position: this turns it by the platform's own facing, so spells and telegraphs cast by an entity
+        /// standing on a moving platform (e.g. a player on a train) aim where it looks.
+        /// </summary>
         public Vector3 Rotation
         {
-            get => MovementManager.GetRotation();
-            set => MovementManager.SetRotation(value, false);
+            get
+            {
+                Vector3 rotation = MovementManager.GetRotation();
+                if (GetPlatformEntity() is IWorldEntity platform)
+                    rotation.X += platform.Rotation.X;
+                return rotation;
+            }
+            set
+            {
+                if (GetPlatformEntity() is IWorldEntity platform)
+                    value.X -= platform.Rotation.X;
+                MovementManager.SetRotation(value, false);
+            }
+        }
+
+        private IWorldEntity GetPlatformEntity()
+        {
+            if (PlatformGuid is not uint platformGuid || platformGuid == Guid)
+                return null;
+            return Map?.GetEntity<IWorldEntity>(platformGuid);
         }
 
         public WorldZoneEntry Zone { get; private set; }
