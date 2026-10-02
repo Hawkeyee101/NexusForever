@@ -108,6 +108,12 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void ActivateObjective(uint objectiveId, uint max = 0u);
 
         /// <summary>
+        /// Activate objective with the supplied objectiveId as if it had been active for <paramref name="elapsed"/>: its
+        /// timer goes on from there, e.g. a countdown carried over from the objective before it.
+        /// </summary>
+        void ActivateObjective(uint objectiveId, uint max, TimeSpan elapsed);
+
+        /// <summary>
         /// Reset objective with supplied objectiveId.
         /// </summary>
         void ResetObjective<T>(T objectiveId) where T : Enum;

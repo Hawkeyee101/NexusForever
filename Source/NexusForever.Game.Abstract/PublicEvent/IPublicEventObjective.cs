@@ -45,6 +45,12 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void ActivateObjective(uint max);
 
         /// <summary>
+        /// Activate the objective as if it had been active for <paramref name="elapsed"/>: its elapsed and failure timers
+        /// start from there.
+        /// </summary>
+        void ActivateObjective(uint max, TimeSpan elapsed);
+
+        /// <summary>
         /// Set the WorldLocation2 points shown on the map for the objective.
         /// </summary>
         void SetLocations(IEnumerable<uint> worldLocation2Ids);

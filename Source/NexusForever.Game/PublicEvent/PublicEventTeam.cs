@@ -198,6 +198,17 @@ namespace NexusForever.Game.PublicEvent
         }
 
         /// <summary>
+        /// Activate specific objective for the team as if it had been active for <paramref name="elapsed"/>.
+        /// </summary>
+        public void ActivateObjective(uint objectiveId, uint max, TimeSpan elapsed)
+        {
+            if (!objectives.TryGetValue(objectiveId, out IPublicEventObjective objective))
+                return;
+
+            objective.ActivateObjective(max, elapsed);
+        }
+
+        /// <summary>
         /// Reset specific objective for the team.
         /// </summary>
         public void ResetObjective(uint objectiveId)

@@ -75,9 +75,14 @@ namespace NexusForever.Game.PublicEvent
         /// </remarks>
         private void StartTimers()
         {
-            elapsedTimer = 0d;
+            elapsedTimer = startElapsed.TotalSeconds;
             failureTimer?.Reset();
+            if (startElapsed > TimeSpan.Zero)
+                failureTimer?.Update(startElapsed.TotalSeconds);
         }
+
+        // how long the objective counts as active already when it is activated (ActivateObjective with elapsed)
+        private TimeSpan startElapsed;
 
         /// <summary>
         /// Invoked each world tick with the delta since the previous tick occurred.
@@ -243,6 +248,17 @@ namespace NexusForever.Game.PublicEvent
 
             DynamicMax = max;
             SetStatus(PublicEventStatus.Active);
+        }
+
+        /// <summary>
+        /// Activate the objective as if it had been active for <paramref name="elapsed"/>: its elapsed and failure timers
+        /// start from there (the activation message carries the elapsed time, so the client's countdown goes on too).
+        /// </summary>
+        public void ActivateObjective(uint max, TimeSpan elapsed)
+        {
+            startElapsed = elapsed;
+            ActivateObjective(max);
+            startElapsed = TimeSpan.Zero;
         }
 
         /// <summary>
@@ -412,7 +428,8 @@ namespace NexusForever.Game.PublicEvent
         /// </remarks>
         public void ResetObjective()
         {
-            if (Status != PublicEventStatus.Succeeded)
+            // a failed objective can be tried again too (e.g. a timed attempt that starts over)
+            if (Status is not (PublicEventStatus.Succeeded or PublicEventStatus.Failed))
                 return;
 
             Count      = 0;
