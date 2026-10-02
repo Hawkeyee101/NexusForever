@@ -13,5 +13,11 @@ namespace NexusForever.Game.Configuration.Model
         public bool CrossFactionChat { get; set; } = true;
         public uint MaxPlayers { get; set; } = 50u;
         public Role? DefaultRole { get; set; } = Role.Player;
+
+        /// <summary>
+        /// Group finder queues start at once, whatever the group size (a solo player or a party short of a full team), instead
+        /// of waiting for the match to fill. For servers with few players.
+        /// </summary>
+        public bool InstantQueue { get; set; } = false;
     }
 }

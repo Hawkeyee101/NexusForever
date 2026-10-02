@@ -2,11 +2,13 @@
 using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Matching;
 using NexusForever.Game.Abstract.Matching.Queue;
+using NexusForever.Game.Configuration.Model;
 using NexusForever.Game.Static.Matching;
 using NexusForever.Game.Static.Reputation;
 using NexusForever.Network.Message;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Shared;
+using NexusForever.Shared.Configuration;
 
 namespace NexusForever.Game.Matching.Queue
 {
@@ -84,6 +86,9 @@ namespace NexusForever.Game.Matching.Queue
                 return true;
 
             if (matchingDataManager.DebugInstantQueue)
+                return true;
+
+            if (SharedConfiguration.Instance.Get<RealmConfig>()?.InstantQueue == true)
                 return true;
 
             return false;
