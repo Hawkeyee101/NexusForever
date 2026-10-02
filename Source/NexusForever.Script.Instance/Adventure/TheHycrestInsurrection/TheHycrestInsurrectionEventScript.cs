@@ -167,7 +167,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // stayed night); retail switches the sky at once while the barn doors are closed, the Long ones fade slowly
         private const uint MorningSkySpell = 50044u;
         private const uint NightSkySpell = 50045u;
-        private const uint CaretakerSkyGreen = 45375u;   // "Adventures - Caretaker Sky Green", the sync's green screen
+        private const uint CaretakerSkyGreen = 63542u;   // the Quick version: 45375 fades in too slowly for the 3 s of the sync (Teun: nothing showed)   // "Adventures - Caretaker Sky Green", the sync's green screen
 
         // the sky once a mission is done (retail video: back to night when The Great Escape returns to the barn)
         private static readonly Dictionary<uint, uint> SkyAfterMission = new()

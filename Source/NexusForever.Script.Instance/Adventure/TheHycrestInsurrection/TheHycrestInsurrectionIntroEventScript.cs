@@ -329,7 +329,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // Adventure_Start_Green, sky group 307 like the Hycrest skies; found by Teun, 2 Oct 2026). It goes on with the sync
         // glow and off with it, then the night sky again. A sky arriving before the old one's removal didn't show, so the
         // old sky is removed first and the new one follows a moment later
-        private const uint CaretakerSkyGreen = 45375u;
+        private const uint CaretakerSkyGreen = 63542u;   // the Quick version: 45375 fades in too slowly for the 3 s of the sync (Teun: nothing showed)
         private const uint NighttimeSkybox = 27236u;
         private const uint SkySpellGroup = 307u;
         private static readonly TimeSpan SkySwitchDelay = TimeSpan.FromSeconds(0.5);
@@ -351,7 +351,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             foreach (ISpell sky in player.GetSpellsByGroupId(SkySpellGroup).ToList())
                 sky.Finish();
             uint guid = player.Guid;
-            actionQueue.Enqueue(SkySwitchDelay, () => WithPlayer(guid, p => Cast(p, skySpell)));
+            actionQueue.Enqueue(SkySwitchDelay, () => WithPlayer(guid, p =>
+            {
+                Cast(p, skySpell);
+                log.LogDebug($"Hycrest: intro sky {skySpell} cast on {p.Name}.");
+            }));
         }
 
         private void Cast(IPlayer player, uint spell4Id)
