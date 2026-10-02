@@ -289,7 +289,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             player.CinematicManager.QueueCinematic(cinematicFactory.CreateCinematic<IHycrestInsurrectionOnEnter>());
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
-            actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, p => p.GetSpellBySpellId(SyncSpell)?.Finish()));
+            actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, EndSync));
             actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1)));
             actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage2)));
 
@@ -325,12 +325,41 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 action(player);
         }
 
+        // the green screen of the synchronisation is a sky: "Adventures - Caretaker Sky Green" (45375, WorldSky 610
+        // Adventure_Start_Green, sky group 307 like the Hycrest skies; found by Teun, 2 Oct 2026). It goes on with the sync
+        // glow and off with it, then the night sky again. A sky arriving before the old one's removal didn't show, so the
+        // old sky is removed first and the new one follows a moment later
+        private const uint CaretakerSkyGreen = 45375u;
+        private const uint NighttimeSkybox = 27236u;
+        private const uint SkySpellGroup = 307u;
+        private static readonly TimeSpan SkySwitchDelay = TimeSpan.FromSeconds(0.5);
+
         private void StartSync(IPlayer player)
+        {
+            Cast(player, SyncSpell);
+            SwitchSky(player, CaretakerSkyGreen);
+        }
+
+        private void EndSync(IPlayer player)
+        {
+            player.GetSpellBySpellId(SyncSpell)?.Finish();
+            SwitchSky(player, NighttimeSkybox);
+        }
+
+        private void SwitchSky(IPlayer player, uint skySpell)
+        {
+            foreach (ISpell sky in player.GetSpellsByGroupId(SkySpellGroup).ToList())
+                sky.Finish();
+            uint guid = player.Guid;
+            actionQueue.Enqueue(SkySwitchDelay, () => WithPlayer(guid, p => Cast(p, skySpell)));
+        }
+
+        private void Cast(IPlayer player, uint spell4Id)
         {
             ISpellParameters parameters = spellParametersFactory.Resolve();
             parameters.PrimaryTargetId        = player.Guid;
             parameters.UserInitiatedSpellCast = false;
-            player.CastSpell(SyncSpell, parameters);
+            player.CastSpell(spell4Id, parameters);
         }
 
         private void PlayNarration(IPlayer player, uint textId)

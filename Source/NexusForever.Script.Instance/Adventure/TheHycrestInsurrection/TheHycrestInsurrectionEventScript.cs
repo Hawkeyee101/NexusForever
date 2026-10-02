@@ -34,7 +34,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             // vote 46; Vesna says the families line in the retail video; communicators not known yet
             [423u] = (PublicEventCreature.VesnaTaranoft,  465556u, 0u),      // "Thank you. Those families deserve the chance..."
             [424u] = (PublicEventCreature.VesnaTaranoft,  465557u, 0u),      // "Be careful as you move around the city..."
-            [425u] = (PublicEventCreature.LysionSinnatus, 465558u, 0u)       // "Deliver my army to freedom..."
+            [425u] = (PublicEventCreature.LysionSinnatus, 465558u, 0u),      // "Deliver my army to freedom..."
+            // vote 48 (speaker inferred from the track)
+            [429u] = (PublicEventCreature.AyitaSinnatus,  465559u, 444074u)  // "Dominion security is tight..." / "...special security clearance."
         };
 
         // the scene before a vote at a regroup (retail video, Sinnatus's Barn after The Farmer's Daughter): the lead lines,
@@ -110,10 +112,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // the run so far: the tier of the current mission and the track chosen on each tier
         // TEMPORARY dev shortcut (Teun, 1 Oct 2026, to speed up testing; not for upstream): a fresh instance skips the intro
         // and starts straight in this mission, as if the route before it was played, and moves joining players to
-        // DevStartSpot. 0 = the normal run. The tracks below lead to Breach of Protocol (Farmer's Daughter, Keymaster)
+        // DevStartSpot. 0 = the normal run. The tracks below lead to Breach of Protocol (Farmer's Daughter, The Great Escape)
         private const uint DevStartMission = 0u;
-        private static readonly HycrestTrack[] DevStartTracks = [HycrestTrack.Merciful, HycrestTrack.Tactical];
-        private static readonly Vector3 DevStartSpot = new(-2389f, -906.5f, -1779.5f);   // foot of the meeting spot's stairs
+        private static readonly HycrestTrack[] DevStartTracks = [HycrestTrack.Merciful, HycrestTrack.Merciful, HycrestTrack.Merciful, HycrestTrack.Merciful];
+        private static readonly Vector3 DevStartSpot = new(-2259.5f, -924.3f, -1332f);   // All Aboard: in the Bell Farmhouse, by Ayita
         private static readonly TimeSpan DevTeleportDelay = TimeSpan.FromSeconds(4);
         private readonly HashSet<ulong> devTeleported = [];
 
@@ -128,8 +130,20 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly Dictionary<uint, uint> HideoutPhases = new()
         {
             [HycrestMissions.RegroupSinnatusBarn] = 11u,
-            [HycrestMissions.RegroupArcwulffFarm] = 13u
+            [HycrestMissions.RegroupArcwulffFarm] = 13u,
+            [HycrestMissions.RegroupBellFarmhouse] = 14u
         };
+
+        // hideouts where Ayita stands: the Arcwulff farmhouse (after Breach of Protocol) and the Bell Farmhouse (after
+        // Clearance, ready to start All Aboard) (Teun, 1 Oct 2026)
+        private static readonly HashSet<uint> StandingHideoutPhases = [13u, 14u];
+
+        // the finale's setup communicator, once the tier 4 mission has gathered everyone at its hideout
+        private static readonly Dictionary<uint, (PublicEventCreature Speaker, uint TextId)> FinaleCommunicators = new()
+        {
+            [429u] = (PublicEventCreature.AyitaSinnatus, 444080u) // "This is just terrible! ...'relocation transports!'"
+        };
+        private static readonly TimeSpan FinaleCommunicatorDelay = TimeSpan.FromSeconds(2);
 
         // guests at a hideout (Arcwulff Farm after Breach of Protocol: Prema; Tarquim and Millithea are in no video): they
         // leave when its door closes
@@ -153,6 +167,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // stayed night); retail switches the sky at once while the barn doors are closed, the Long ones fade slowly
         private const uint MorningSkySpell = 50044u;
         private const uint NightSkySpell = 50045u;
+        private const uint CaretakerSkyGreen = 45375u;   // "Adventures - Caretaker Sky Green", the sync's green screen
 
         // the sky once a mission is done (retail video: back to night when The Great Escape returns to the barn)
         private static readonly Dictionary<uint, uint> SkyAfterMission = new()
@@ -171,7 +186,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             [HycrestMissions.RegroupAbandonedBarn] = 20u,
             [HycrestMissions.RegroupSinnatusBarn]  = 21u,
-            [HycrestMissions.RegroupArcwulffFarm]  = 22u  // the farmhouse door (Farmhouse Door - Platform 51065)
+            [HycrestMissions.RegroupArcwulffFarm]  = 22u, // the farmhouse door (Farmhouse Door - Platform 51065)
+            [HycrestMissions.RegroupBellFarmhouse] = 23u  // the same door, Bell Farmhouse
         };
 
         // the doors open once the mission after a vote has everything on the map (any layout): all its spawns added
@@ -247,7 +263,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             for (int i = 0; i < devTier && i < DevStartTracks.Length; i++)
                 tracks[i] = DevStartTracks[i];
-            skySpell = NightSkySpell;
+            // daylight again from the Arcwulff farmhouse (after Breach of Protocol) on
+            skySpell = devTier > HycrestMissions.InterludeTier ? MorningSkySpell : NightSkySpell;
+            // the finale starts in the tier 4 mission's hideout (All Aboard: Ayita standing in the Bell Farmhouse)
+            if (devTier == HycrestMissions.FinaleTier
+                && HycrestMissions.RegroupAfter.TryGetValue(HycrestMissions.GetMission(devTier - 1, tracks[devTier - 1]), out uint devHideout))
+                MoveNpcsTo(devHideout);
             sceneQueue.Enqueue(TimeSpan.Zero, () => StartMission(DevStartMission));
             log.LogWarning($"Hycrest: DEV START at mission {DevStartMission} (TheHycrestInsurrectionEventScript.DevStartMission), no intro.");
         }
@@ -267,8 +288,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             UpdateSeated(lastTick);
         }
 
-        // Ayita sits wherever she is (hay bales, hideouts). The sit goes out again now and then, like Breach's crying: in the
-        // Arcwulff farmhouse she was seen standing (1 Oct 2026), though nothing in the scripts stands her up
+        // Ayita sits wherever she is (hay bales, the barns), except in the hideouts where she stands
+        // (StandingHideoutPhases). The sit goes out again now and then, like Breach's crying
         private static readonly TimeSpan SitResend = TimeSpan.FromSeconds(5);
         private double sitTimer;
 
@@ -279,6 +300,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             sitTimer = SitResend.TotalSeconds;
+            if (StandingHideoutPhases.Contains(hideoutPhase))
+                return;
             if (!npcGuids.TryGetValue(PublicEventCreature.AyitaSinnatus, out List<uint> guids))
                 return;
 
@@ -379,6 +402,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 case PublicEventCreature.LysionSinnatus:
                     AddNpc(creature, worldEntity.Guid);
                     break;
+                case PublicEventCreature.CaretakerHologram:
+                    // the end scene's Caretaker in the church
+                    if (publicEvent.GetEntities().Contains(worldEntity))
+                        caretakerGuid = worldEntity.Guid;
+                    break;
                 case PublicEventCreature.BarnDoor:
                 case PublicEventCreature.FarmhouseDoor:
                     // spawned by CloseBarnDoor, removed by OpenBarnDoors
@@ -388,7 +416,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 {
                     AddNpc(creature, worldEntity.Guid);
                     // retail: she sits on top of the hay bales; stand state is a stat, so players arriving later see it too
-                    worldEntity.StandState = StandState.Sit;
+                    if (!StandingHideoutPhases.Contains(hideoutPhase))
+                        worldEntity.StandState = StandState.Sit;
                     break;
                 }
             }
@@ -610,13 +639,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             if (missionTier == HycrestMissions.FinaleTier)
             {
-                CompleteRun();
+                StartEndScene();
                 return;
             }
 
             // the finale follows the tier 4 track right away, it starts where the tier 4 mission ended
             if (missionTier == HycrestMissions.FinaleTier - 1)
             {
+                if (HycrestMissions.EndsAtHideout.Contains(missionId))
+                    CloseFinaleHideout(missionId);
                 sceneQueue.Enqueue(NextMissionDelay, () => StartMission(HycrestMissions.GetMission(HycrestMissions.FinaleTier, track)));
                 return;
             }
@@ -634,6 +665,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             }
 
             StartRegroup(HycrestMissions.RegroupAfter[missionId]);
+        }
+
+        /// <summary>
+        /// The tier 4 mission ended in its hideout: the door closes behind the players (the mission's leftovers go), no
+        /// vote follows; the finale's setup communicator comes in and the finale starts there.
+        /// </summary>
+        private void CloseFinaleHideout(uint missionId)
+        {
+            regroupObjective = HycrestMissions.RegroupAfter[missionId];
+            MoveNpcsTo(regroupObjective);
+
+            finishedMission?.InvokeScriptCollection<IHycrestMissionScript>(s => s.OnHideoutClosed());
+            finishedMission = null;
+            foreach (uint guid in hideoutGuests)
+                if (mapInstance.GetEntity<IWorldEntity>(guid) is { InWorld: true } guest)
+                    guest.RemoveFromMap();
+            hideoutGuests.Clear();
+
+            CloseBarnDoor(regroupObjective);
+
+            if (FinaleCommunicators.TryGetValue(missionId, out var communicator))
+                sceneQueue.Enqueue(FinaleCommunicatorDelay, () =>
+                {
+                    foreach (IPlayer player in mapInstance.GetPlayers())
+                        storyBuilder.SendStoryCommunicator(communicator.TextId, (uint)communicator.Speaker, player, CommunicatorDurationMs);
+                });
         }
 
         private void StartRegroup(uint objectiveId)
@@ -666,12 +723,40 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             log.LogInformation($"Hycrest: sky spell {spell4Id} cast on the players.");
         }
 
+        // the skybox spells share spell group 307; each removes the others (SpellForceRemove) when it applies its own sky.
+        // A day sky cast over the night sky didn't show (1 Oct 2026, after Breach of Protocol, logged as cast): the new
+        // sky reaches the client first, then the old one's removal, and the client falls back to the map's own (night)
+        // sky. So the old sky goes first and the new one follows a moment later
+        private const uint SkySpellGroup = 307u;
+        private static readonly TimeSpan SkyRecastDelay = TimeSpan.FromSeconds(0.5);
+
         private void CastSky(IPlayer player, uint spell4Id)
+        {
+            List<ISpell> oldSkies = player.GetSpellsByGroupId(SkySpellGroup).ToList();
+            if (oldSkies.Count > 0)
+            {
+                foreach (ISpell oldSky in oldSkies)
+                    oldSky.Finish();
+
+                uint guid = player.Guid;
+                sceneQueue.Enqueue(SkyRecastDelay, () =>
+                {
+                    if (mapInstance.GetEntity<IPlayer>(guid) is IPlayer stillHere)
+                        CastSkySpell(stillHere, spell4Id);
+                });
+                return;
+            }
+
+            CastSkySpell(player, spell4Id);
+        }
+
+        private void CastSkySpell(IPlayer player, uint spell4Id)
         {
             ISpellParameters parameters = spellParametersFactory.Resolve();
             parameters.PrimaryTargetId        = player.Guid;
             parameters.UserInitiatedSpellCast = false;
             player.CastSpell(spell4Id, parameters);
+            log.LogDebug($"Hycrest: sky spell {spell4Id} cast on {player.Name}.");
         }
 
         /// <summary>
@@ -790,6 +875,68 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             TimeSpan time = QueueLines(TimeSpan.Zero, scene.Lead, gestures: true);
             sceneQueue.Enqueue(time, () => StartVote(voteId));
             QueueLines(time, scene.DuringVote, whileVoting: true, gestures: true);
+        }
+
+        // the end of the run (retail video, Teun 1 Oct 2026): everyone is taken to Hycrest church (WorldLocation2 45046), where
+        // the Caretaker (the hologram 56685, as in the intro) talks; the green synchronisation wash plays again, the
+        // exit portal appears behind him and the run's stats card follows. Main event phases: 30 the Caretaker, 31 the
+        // portal. Spots from Jabbithole (Caretaker -2274, -1867; portal -2263, -1862), church floor -868.4 (Surveyor)
+        private const uint EndScenePhase  = 30u;
+        private const uint EndPortalPhase = 31u;
+        private static readonly Vector3 ChurchSpot = new(-2278.5f, -868.0f, -1869f);   // in front of the Caretaker
+        private const uint CaretakerCongratulations = 448493u; // "Congratulations, test subjects. ..."
+        private const uint CaretakerDoNotAssume     = 448494u; // "Do not assume that because you beat this simulation once, ..."
+        private const uint CaretakerGold            = 455474u; // gold medal comment (silver 455475, bronze 455476)
+        private const uint SyncSpell = 62968u;                 // Transimulator Synchronization, the green wash
+        private static readonly TimeSpan SyncDuration = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan EndSyncDelay = TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan EndLineGap   = TimeSpan.FromSeconds(9);
+        private uint caretakerGuid;
+
+        private void StartEndScene()
+        {
+            log.LogInformation("Hycrest: the run's end scene in Hycrest church.");
+            publicEvent.SetPhase(EndScenePhase);
+            foreach (IPlayer player in mapInstance.GetPlayers())
+                if (player.CanTeleport())
+                    player.TeleportToLocal(ChurchSpot, false);
+
+            // the green synchronisation on the players as soon as they are there (Teun, 2 Oct 2026)
+            sceneQueue.Enqueue(EndSyncDelay, () =>
+            {
+                foreach (IPlayer player in mapInstance.GetPlayers())
+                {
+                    ISpellParameters parameters = spellParametersFactory.Resolve();
+                    parameters.PrimaryTargetId        = player.Guid;
+                    parameters.UserInitiatedSpellCast = false;
+                    player.CastSpell(SyncSpell, parameters);
+                }
+                // the green screen (the Caretaker's green sky) with the glow
+                SetSky(CaretakerSkyGreen);
+            });
+            sceneQueue.Enqueue(EndSyncDelay + SyncDuration, () =>
+            {
+                foreach (IPlayer player in mapInstance.GetPlayers())
+                    player.GetSpellBySpellId(SyncSpell)?.Finish();
+                // then daylight for the church
+                SetSky(MorningSkySpell);
+            });
+
+            TimeSpan time = TimeSpan.FromSeconds(4) + SyncDuration;
+            foreach (uint line in new[] { CaretakerCongratulations, CaretakerDoNotAssume, CaretakerGold })
+            {
+                uint textId = line;
+                sceneQueue.Enqueue(time, () =>
+                {
+                    if (mapInstance.GetEntity<IWorldEntity>(caretakerGuid) is { InWorld: true } caretaker)
+                        dialogue.Say(caretaker, textId, false);
+                });
+                time += EndLineGap;
+            }
+
+            // the exit portal (phase 31: no spawn until its spot is measured, Teun), then the stats card
+            sceneQueue.Enqueue(time, () => publicEvent.SetPhase(EndPortalPhase));
+            sceneQueue.Enqueue(time + TimeSpan.FromSeconds(2), CompleteRun);
         }
 
         private void CompleteRun()

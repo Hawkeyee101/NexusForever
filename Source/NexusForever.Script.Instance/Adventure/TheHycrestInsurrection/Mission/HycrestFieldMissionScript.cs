@@ -166,6 +166,31 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             return loop;
         }
 
+        /// <summary>
+        /// Patrol <paramref name="route"/> there and back for good (combat interrupts it, it goes on from the nearest node
+        /// afterwards); <see cref="UpdateWalks"/> has to run.
+        /// </summary>
+        protected void StartPatrol(IWorldEntity entity, IReadOnlyList<Vector3> route, float speed)
+        {
+            if (route.Count < 2)
+                return;
+
+            List<Vector3> loop = [.. route];
+            for (int i = route.Count - 2; i >= 0; i--)
+                loop.Add(route[i]);
+            LaunchLoop(entity, loop, NearestNode(loop, entity.Position), speed);
+        }
+
+        /// <summary>
+        /// Put a walker back on its patrol from where it stands, e.g. in the tick its fight ended: CombatAI's reset would
+        /// first send it to its spawn point (LeashPosition), the start of its route.
+        /// </summary>
+        protected void ResumeWalk(IWorldEntity entity)
+        {
+            if (walks.TryGetValue(entity.Guid, out Walk walk) && entity.CreatureId == walk.CreatureId)
+                LaunchLoop(entity, walk.Loop, NearestNode(walk.Loop, entity.Position), walk.Speed);
+        }
+
         private class Walk
         {
             public uint CreatureId;

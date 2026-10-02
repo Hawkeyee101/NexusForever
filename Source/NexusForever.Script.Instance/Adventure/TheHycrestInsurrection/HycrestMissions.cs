@@ -130,7 +130,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             [425u] = RegroupArcwulffFarm,
             [426u] = RegroupArcwulffFarm, // retail video: "Meet us at the nearby safehouse" (Vesna, 461016)
             [427u] = RegroupAbandonedBarn,
-            [428u] = RegroupAbandonedBarn
+            [428u] = RegroupAbandonedBarn,
+            [429u] = RegroupBellFarmhouse  // Clearance: "Meet with Ayita Sinnatus in the nearby farmhouse" (objective 2167)
         };
 
         /// <summary>
@@ -139,7 +140,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public static readonly IReadOnlySet<uint> EndsAtHideout = new HashSet<uint>
         {
-            423u // The Great Escape: "Return to the Barn"
+            423u, // The Great Escape: "Return to the Barn"
+            429u  // Clearance: "Meet with Ayita Sinnatus in the nearby farmhouse"
         };
 
         public const uint RegroupAbandonedBarn = 1772u;
