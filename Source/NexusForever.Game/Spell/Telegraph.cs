@@ -12,6 +12,10 @@ namespace NexusForever.Game.Spell
     {
         private static readonly ILogger log = LogManager.GetCurrentClassLogger();
 
+        // how far above or below a circle, cone or pie telegraph a target can still be hit (WildStar telegraphs have a
+        // vertical limit; without one, a cone on the ground hit units on a roof 12 m up)
+        private const float VerticalReach = 5f;
+
         public IUnitEntity Caster { get; }
         public Vector3 Position { get; private set; }
         public Vector3 Rotation { get; private set; }
@@ -68,6 +72,12 @@ namespace NexusForever.Game.Spell
         public bool InsideTelegraph(Vector3 position, float hitRadius)
         {
             hitRadius *= 0.5f;
+
+            // circles, cones and pies have no height of their own: they reach this far up and down (plus the target's
+            // size), so a telegraph on the ground doesn't hit units standing on a roof or a raised deck above it
+            if ((DamageShape)TelegraphDamage.DamageShapeEnum is not (DamageShape.Square or DamageShape.Rectangle)
+                && MathF.Abs(position.Y - Position.Y) > VerticalReach + hitRadius)
+                return false;
 
             switch ((DamageShape)TelegraphDamage.DamageShapeEnum)
             {
