@@ -95,7 +95,9 @@ namespace NexusForever.Game.Spell.Type
             switch (status)
             {
                 case SpellStatus.Casting:
-                    if (Parameters.ClientSideInteraction.Entry != null)
+                    // a client side interaction spell cast by another spell (a proxy, e.g. a lever's 58497 -> 58498) has no
+                    // interaction of its own: a normal spell start
+                    if (Parameters.ClientSideInteraction?.Entry != null || Parameters.ClientSideInteraction == null)
                         SendSpellStart();
                     else
                         SendSpellStartClientInteraction();
@@ -105,7 +107,8 @@ namespace NexusForever.Game.Spell.Type
 
         protected override uint GetPrimaryTargetId()
         {
-            return Parameters.ClientSideInteraction.Entry != null ? Caster.Guid : Parameters.PrimaryTargetId;
+            return Parameters.ClientSideInteraction == null || Parameters.ClientSideInteraction.Entry != null
+                ? Caster.Guid : Parameters.PrimaryTargetId;
         }
     }
 }
