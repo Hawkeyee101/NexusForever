@@ -694,7 +694,7 @@ namespace NexusForever.Game.Spell
             if (castResult == CastResult.Ok)
                 return;
 
-            log.LogTrace($"Spell {Parameters.SpellInfo.Entry.Id} failed to cast {castResult}.");
+            log.LogDebug($"Spell {Parameters.SpellInfo.Entry.Id} failed to cast {castResult}.");
 
             if (Caster is IPlayer player && !player.IsLoading)
             {
