@@ -22,8 +22,6 @@ namespace NexusForever.Game.Spell
         public TelegraphDamageEntry TelegraphDamage { get; }
         public TelegraphTargetTypeFlags TelegraphTargetTypeFlags => (TelegraphTargetTypeFlags)TelegraphDamage.TargetTypeFlags;
 
-        private float casterHitRadius => Caster.HitRadius * 0.5f;
-
         public Telegraph(TelegraphDamageEntry telegraphDamageEntry, IUnitEntity caster, Vector3 position, Vector3 rotation)
         {
             TelegraphDamage = telegraphDamageEntry;
@@ -69,81 +67,113 @@ namespace NexusForever.Game.Spell
         /// <summary>
         /// Returns whether the supplied <see cref="Vector3"/> is inside the telegraph.
         /// </summary>
+        /// <remarks>
+        /// Shape parameters follow the client's own geometry (telegraph damage shape semantics reverse engineered from the
+        /// client): boxes and rectangles take full extents (drawn as half extents), cones and pies an inner and outer radius
+        /// and an angle in degrees.
+        /// </remarks>
         public bool InsideTelegraph(Vector3 position, float hitRadius)
         {
             hitRadius *= 0.5f;
 
-            // circles, cones and pies have no height of their own: they reach this far up and down (plus the target's
+            var shape = (DamageShape)TelegraphDamage.DamageShapeEnum;
+
+            // circles, rings, cones and pies have no height of their own: they reach this far up and down (plus the target's
             // size), so a telegraph on the ground doesn't hit units standing on a roof or a raised deck above it
-            if ((DamageShape)TelegraphDamage.DamageShapeEnum is not (DamageShape.Square or DamageShape.Rectangle)
+            if (shape is DamageShape.Circle or DamageShape.Ring or DamageShape.Cone or DamageShape.LongCone or DamageShape.Pie
                 && MathF.Abs(position.Y - Position.Y) > VerticalReach + hitRadius)
                 return false;
 
-            switch ((DamageShape)TelegraphDamage.DamageShapeEnum)
+            switch (shape)
             {
                 case DamageShape.Circle:
                 {
                     float telegraphRange = TelegraphDamage.Param00;
                     return Vector2.Distance(new Vector2(Position.X, Position.Z), new Vector2(position.X, position.Z)) <= telegraphRange + hitRadius;
                 }
+                case DamageShape.Ring:
+                {
+                    float innerRadius = MathF.Max(TelegraphDamage.Param00, 0f);
+                    float outerRadius = TelegraphDamage.Param01;
+
+                    float distance = Vector2.Distance(new Vector2(Position.X, Position.Z), new Vector2(position.X, position.Z));
+                    return distance - hitRadius <= outerRadius && distance + hitRadius >= innerRadius;
+                }
                 case DamageShape.Cone:
                 case DamageShape.LongCone:
                 {
-                    float telegraphStart = TelegraphDamage.Param00 - casterHitRadius;
-                    float telegraphRadius = TelegraphDamage.Param01 + casterHitRadius;
-                    float telegraphAngleInDegrees = TelegraphDamage.Param02 + (TelegraphDamage.Param00 / 2f);
+                    // TODO: LongCone can have extra side and end extents in Param03-05, the outer radius is used for now
+                    float telegraphStart          = MathF.Max(TelegraphDamage.Param00, 0f);
+                    float telegraphRadius         = TelegraphDamage.Param01;
+                    float telegraphAngleInDegrees = MathF.Min(TelegraphDamage.Param02, 360f);
 
-                    return IsHitInsideAngle(position, hitRadius, telegraphStart, telegraphRadius, telegraphAngleInDegrees);
+                    return IsHitInsideAngle(position, hitRadius, telegraphStart, telegraphRadius, telegraphAngleInDegrees, Rotation.X);
                 }
                 case DamageShape.Square:
+                    return IsHitInsideBox(position, hitRadius, TelegraphDamage.Param00, TelegraphDamage.Param01, TelegraphDamage.Param02, false);
                 case DamageShape.Rectangle:
-                {
-                    /// <remarks>This is not perfect. It works, but there are more efficient options like https://yal.cc/rot-rect-vs-circle-intersection </remarks>
-                    float telegraphWidth  = TelegraphDamage.Param00;
-                    float telegraphHeight = TelegraphDamage.Param01;
-                    float telegraphLength = TelegraphDamage.Param02;
-
-                    // TODO: If target is higher or lower than telegraph height, this should not hit. Confirm functionality.
-                    if (position.Y >= Position.Y + telegraphHeight || position.Y <= Position.Y - telegraphHeight)
-                        return false;
-
-                    // Find the points in the local co-ordinate space
-                    var bottomRight = new Vector3(-telegraphWidth, 0, -telegraphLength);
-                    var bottomLeft  = new Vector3(telegraphWidth, 0, -telegraphLength);
-                    var topRight    = new Vector3(-telegraphWidth, 0, telegraphLength);
-                    var topLeft     = new Vector3(telegraphWidth, 0, telegraphLength);
-
-                    // Rectangle's origin is at it's base, so adjust the starting points appropriately.
-                    if ((DamageShape)TelegraphDamage.DamageShapeEnum == DamageShape.Rectangle)
-                    {
-                        bottomRight.Z = 0;
-                        bottomLeft.Z  = 0;
-                    }
-
-                    // Translate points to global co-ordinate space, and apply rotation based on the Telegraph's rotation
-                    bottomLeft  = Vector3.Add(RotatePoint(bottomLeft, Rotation.X), Position);
-                    bottomRight = Vector3.Add(RotatePoint(bottomRight, Rotation.X), Position);
-                    topLeft     = Vector3.Add(RotatePoint(topLeft, Rotation.X), Position);
-                    topRight    = Vector3.Add(RotatePoint(topRight, Rotation.X), Position);
-
-                    Vector3[] points = new Vector3[] { bottomLeft, topLeft, topRight, bottomRight };
-                    return IsHitInsidePolygon(points, position, hitRadius);
-                }
+                    return IsHitInsideBox(position, hitRadius, TelegraphDamage.Param00, TelegraphDamage.Param01, TelegraphDamage.Param02, true);
+                case DamageShape.Cross:
+                    return IsHitInsideBox(position, hitRadius, TelegraphDamage.Param00, TelegraphDamage.Param01, TelegraphDamage.Param02, false)
+                        || IsHitInsideBox(position, hitRadius, TelegraphDamage.Param02, TelegraphDamage.Param01, TelegraphDamage.Param00, false);
                 case DamageShape.Pie:
                 {
+                    // the client stores the span as the full circle minus the angle, turned around by half a circle:
+                    // everything but the slice of Param02 degrees in front
+                    float innerRadius             = MathF.Max(TelegraphDamage.Param00, 0f);
                     float telegraphRadius         = TelegraphDamage.Param01;
-                    float telegraphAngleInDegrees = TelegraphDamage.Param02;
+                    float telegraphAngleInDegrees = 360f - MathF.Min(TelegraphDamage.Param02, 360f);
 
-                    float closestDistance = Position.GetDistance(position) - hitRadius;
-                    if (closestDistance > telegraphRadius)
+                    return IsHitInsideAngle(position, hitRadius, innerRadius, telegraphRadius, telegraphAngleInDegrees, Rotation.X + MathF.PI);
+                }
+                case DamageShape.Volume:
+                {
+                    // the radii are used as they are, Param00 across, Param01 up and down, Param02 along the telegraph
+                    if (MathF.Abs(position.Y - Position.Y) > TelegraphDamage.Param01 + hitRadius)
                         return false;
 
-                    return !IsHitInsideAngle(position, hitRadius, 0f, telegraphRadius, telegraphAngleInDegrees);
+                    Vector3 local = RotatePoint(position - Position, -Rotation.X);
+                    float x = local.X / (TelegraphDamage.Param00 + hitRadius);
+                    float z = local.Z / (TelegraphDamage.Param02 + hitRadius);
+                    return x * x + z * z <= 1f;
                 }
                 default:
-                    log.Warn($"Unhandled telegraph shape {(DamageShape)TelegraphDamage.DamageShapeEnum}.");
+                    log.Warn($"Unhandled telegraph shape {shape}.");
                     return false;
             }
+        }
+
+        /// <summary>
+        /// Returns whether the supplied <see cref="Vector3"/> is inside a box of the supplied full extents, centred on the
+        /// telegraph or, for a rectangle, starting at it.
+        /// </summary>
+        private bool IsHitInsideBox(Vector3 position, float hitRadius, float width, float height, float length, bool fromBase)
+        {
+            /// <remarks>This is not perfect. It works, but there are more efficient options like https://yal.cc/rot-rect-vs-circle-intersection </remarks>
+            float halfWidth  = width / 2f;
+            float halfHeight = height / 2f;
+            float halfLength = length / 2f;
+
+            if (MathF.Abs(position.Y - Position.Y) > halfHeight + hitRadius)
+                return false;
+
+            // Find the points in the local co-ordinate space, a rectangle's origin is at its base
+            float start = fromBase ? 0f : -halfLength;
+            float end   = fromBase ? length : halfLength;
+
+            var bottomRight = new Vector3(-halfWidth, 0, start);
+            var bottomLeft  = new Vector3(halfWidth, 0, start);
+            var topRight    = new Vector3(-halfWidth, 0, end);
+            var topLeft     = new Vector3(halfWidth, 0, end);
+
+            // Translate points to global co-ordinate space, and apply rotation based on the Telegraph's rotation
+            bottomLeft  = Vector3.Add(RotatePoint(bottomLeft, Rotation.X), Position);
+            bottomRight = Vector3.Add(RotatePoint(bottomRight, Rotation.X), Position);
+            topLeft     = Vector3.Add(RotatePoint(topLeft, Rotation.X), Position);
+            topRight    = Vector3.Add(RotatePoint(topRight, Rotation.X), Position);
+
+            Vector3[] points = [bottomLeft, topLeft, topRight, bottomRight];
+            return IsHitInsidePolygon(points, position, hitRadius);
         }
 
         private float GridSearchSize()
@@ -152,8 +182,10 @@ namespace NexusForever.Game.Spell
             {
                 case DamageShape.Circle:
                     return TelegraphDamage.Param00;
+                case DamageShape.Ring:
                 case DamageShape.Cone:
                 case DamageShape.LongCone:
+                case DamageShape.Pie:
                     return TelegraphDamage.Param01;
                 case DamageShape.Square:
                 case DamageShape.Rectangle:
@@ -174,7 +206,7 @@ namespace NexusForever.Game.Spell
             return false;
         }
 
-        private bool IsHitInsideAngle(Vector3 targetPosition, float hitRadius, float startRadius, float telegraphRadius, float angle)
+        private bool IsHitInsideAngle(Vector3 targetPosition, float hitRadius, float startRadius, float telegraphRadius, float angle, float rotation)
         {
             float distance = Position.GetDistance(targetPosition);
 
@@ -184,7 +216,7 @@ namespace NexusForever.Game.Spell
             if (distance + hitRadius < startRadius)
                 return false;
 
-            float angleRadian = (Position.GetAngle(targetPosition) - Rotation.X).NormaliseRotationRadians();
+            float angleRadian = (Position.GetAngle(targetPosition) - rotation).NormaliseRotationRadians();
 
             float angleDegrees = MathF.Abs(angleRadian.NormaliseRotationRadians().ToDegrees());
             if (angleDegrees > angle / 2f || angleDegrees < -angle / 2f)
@@ -201,11 +233,11 @@ namespace NexusForever.Game.Spell
                     Vector3 rightEdge;
                     if (startRadius > 0f)
                     {
-                        Vector3 rightStartPosition = Position.GetPointForTelegraph(((angle / 2f) * -1f).ToRadians() + Rotation.X + MathF.PI / 2, startRadius);
-                        rightEdge = rightStartPosition.GetPointForTelegraph(((angle / 2f) * -1f).ToRadians() + Rotation.X + MathF.PI / 2, telegraphRadius);
+                        Vector3 rightStartPosition = Position.GetPointForTelegraph(((angle / 2f) * -1f).ToRadians() + rotation + MathF.PI / 2, startRadius);
+                        rightEdge = rightStartPosition.GetPointForTelegraph(((angle / 2f) * -1f).ToRadians() + rotation + MathF.PI / 2, telegraphRadius);
                     }
                     else
-                        rightEdge = Position.GetPointForTelegraph(((angle / 2f) * -1f).ToRadians() + Rotation.X + MathF.PI / 2, telegraphRadius);
+                        rightEdge = Position.GetPointForTelegraph(((angle / 2f) * -1f).ToRadians() + rotation + MathF.PI / 2, telegraphRadius);
 
                     if (IsRadiusIntersectingLine(Position, rightEdge, targetPosition, hitRadius))
                         return true;
@@ -215,11 +247,11 @@ namespace NexusForever.Game.Spell
                     Vector3 leftEdge;
                     if (startRadius > 0f)
                     {
-                        Vector3 leftStartPosition = Position.GetPointForTelegraph((angle / 2f).ToRadians() + Rotation.X + MathF.PI / 2, startRadius);
-                        leftEdge = leftStartPosition.GetPointForTelegraph((angle / 2f).ToRadians() + Rotation.X + MathF.PI / 2, telegraphRadius);
+                        Vector3 leftStartPosition = Position.GetPointForTelegraph((angle / 2f).ToRadians() + rotation + MathF.PI / 2, startRadius);
+                        leftEdge = leftStartPosition.GetPointForTelegraph((angle / 2f).ToRadians() + rotation + MathF.PI / 2, telegraphRadius);
                     }
                     else
-                        leftEdge = Position.GetPointForTelegraph((angle / 2f).ToRadians() + Rotation.X + MathF.PI / 2, telegraphRadius);
+                        leftEdge = Position.GetPointForTelegraph((angle / 2f).ToRadians() + rotation + MathF.PI / 2, telegraphRadius);
 
                     if (IsRadiusIntersectingLine(Position, leftEdge, targetPosition, hitRadius))
                         return true;
