@@ -6,6 +6,7 @@ using NexusForever.Game.Abstract.Map.Instance;
 using NexusForever.Game.Abstract.PublicEvent;
 using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Spell;
+using NexusForever.Game.Static.Reputation;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Network.World.Message.Model.Shared;
 using NexusForever.Shared;
@@ -26,6 +27,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     public class HycrestAlarm
     {
         private const uint ReconSpecialist = 17823u;
+        private const Faction DominionFaction = (Faction)1452u;
         private const uint AssistanceFlare = 50310u;
         private const uint ChuaGroundDrill = 50363u;
         private const uint RapidResponseCommando = 50378u;
@@ -249,10 +251,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             }
 
             callElapsed += lastTick;
-            if (!callSpell.IsFinished)
+            // the cast is done once it stops casting: the spell itself goes on while its summon effect lasts (until the
+            // specialist dies), so waiting for it to finish never released the flare (Teun's test, 5 Oct 2026)
+            if (callSpell.IsCasting)
                 return;
 
-            // a cancelled cast finishes (not fails) before its cast time
+            // a cancelled cast stops before its cast time
             if (callSpell.IsFailed || callElapsed < CastTime.TotalSeconds - 0.1d)
             {
                 log.LogInformation("Hycrest: alarm, Call Reinforcements was interrupted.");
@@ -296,7 +300,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void ReleaseFlare()
         {
-            flare      = Spawn(AssistanceFlare, specialist.Position, specialist.Position);
+            // the flare and the drill are faction 1451, which the engine treats as hostile to the Dominion: the
+            // specialist's own Precision Blast destroyed the flare (Teun's test, 5 Oct 2026). They take his faction, the
+            // players can still destroy them
+            flare      = Spawn(AssistanceFlare, specialist.Position, specialist.Position, specialist.Faction1);
             state      = AlarmState.Flare;
             stateTimer = FlareDuration.TotalSeconds;
 
@@ -326,7 +333,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             Vector3 towards = target?.Position ?? origin;
             Vector3 position = MoveTowards(origin, towards, DrillDistance);
 
-            IUnitEntity drill = Spawn(ChuaGroundDrill, position, towards);
+            IUnitEntity drill = Spawn(ChuaGroundDrill, position, towards, DominionFaction);
             if (drill != null)
             {
                 actionQueue.Enqueue(TimeSpan.FromMilliseconds(100), () =>
@@ -399,7 +406,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             log.LogInformation($"Hycrest: alarm stopped, {reason}.");
         }
 
-        private IUnitEntity Spawn(uint creatureId, Vector3 position, Vector3 facing)
+        private IUnitEntity Spawn(uint creatureId, Vector3 position, Vector3 facing, Faction? faction = null)
         {
             ICreatureInfo creatureInfo = creatureInfoManager.GetCreatureInfo(creatureId);
             if (creatureInfo == null)
@@ -411,6 +418,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             var entity = publicEvent.CreateEntity<INonPlayerEntity>();
             entity.Initialise(creatureInfo);
+            if (faction.HasValue)
+            {
+                entity.Faction1 = faction.Value;
+                entity.Faction2 = faction.Value;
+            }
 
             Vector3 direction = facing - position;
             if (direction.LengthSquared() > 0.01f)

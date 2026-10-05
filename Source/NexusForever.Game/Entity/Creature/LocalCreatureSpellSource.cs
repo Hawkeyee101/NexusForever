@@ -78,8 +78,8 @@ namespace NexusForever.Game.Entity.Creature
             return (uint)Math.Max(0d, seconds * 1000d);
         }
 
-        // Hycrest enemies (scripted ones stay out: the spotlights, Arsenax's kit, Groo, the Suppressionbot, All Aboard's
-        // roof snipers 26360)
+        // Hycrest enemies (scripted ones stay out: the spotlights, Groo's ability rotation (only his auto attack is here),
+        // All Aboard's roof snipers 26360 and the train's Suppression Specialists 17742)
         private const uint DominionScout              = 17856u;
         private const uint DominionSoldier            = 17857u;
         private const uint DominionEngineeringOfficer = 17949u;
@@ -93,6 +93,18 @@ namespace NexusForever.Game.Entity.Creature
         private const uint RapidResponseCommando      = 50378u;
         private const uint DominionGatekeeper         = 26853u;
         private const uint ShatterforceResponsebot    = 18509u;
+        private const uint DominionAmbusher           = 17954u;
+        private const uint DominionTechsmith          = 17859u;
+        private const uint FieldIntelligenceAgent     = 18445u;
+        private const uint RecoveryAgentWaveOne       = 19115u;
+        private const uint RecoveryLeaderWaveOne      = 19130u;
+        private const uint RecoveryAgentWaveTwo       = 50676u;
+        private const uint RecoveryLeaderWaveTwo      = 50677u;
+        private const uint DominionRocketeer          = 48255u;
+        private const uint DominionGuardbot           = 49118u;
+        private const uint ArsenaxAmbush              = 48373u;
+        private const uint SuppressionbotMk2          = 50758u;
+        private const uint TwitchyGroo                = 23503u;
 
         private const uint PlasmaShot      = 65717u;
         private const uint ShellStorm      = 66281u;
@@ -122,6 +134,13 @@ namespace NexusForever.Game.Entity.Creature
         private const uint Eradicate       = 66395u;
         private const uint Exterminate     = 66397u;
         private const uint RockEm          = 66398u;
+        private const uint Clobber         = 65952u;
+        private const uint HammerSmash     = 65953u;
+        private const uint CrushingFlurry  = 66259u;
+        private const uint ElectricShot    = 65735u;
+        private const uint ChainGun        = 66148u;
+        private const uint AttackSequence  = 66352u;
+        private const uint Onslaught       = 66105u;
 
         private static readonly ICreatureSpell[] spells =
         [
@@ -131,7 +150,7 @@ namespace NexusForever.Game.Entity.Creature
             Special(DominionScout, ShellStorm, first: 6d, every: 12d, range: 15f, CreatureSpellTarget.Victim, 1, "Shell Storm"),
             Special(DominionScout, Longshot, first: 10d, every: 18d, range: 20f, CreatureSpellTarget.Victim, 0, "Longshot"),
             Special(DominionScout, MortarBarrage, first: 8d, every: 20d, range: 30f, CreatureSpellTarget.VictimPosition, 0, "Mortar Barrage"),
-            Special(DominionScout, Snipe, first: 12d, every: 20d, range: 60f, CreatureSpellTarget.Victim, 0, "Snipe", minRange: 6f),
+            Special(DominionScout, Snipe, first: 1d, every: 20d, range: 60f, CreatureSpellTarget.Victim, 0, "Snipe (opens the fight: Teun, 5 Oct 2026)", minRange: 6f),
 
             // Dominion Soldier: rifle, Shell Storm, Mortar Barrage
             AutoAttack(DominionSoldier, PlasmaShot, "Plasma Shot"),
@@ -165,7 +184,7 @@ namespace NexusForever.Game.Entity.Creature
             // can't summon the flare, drill and Rapid Response Team); once per fight
             AutoAttack(ReconSpecialist, Blast, "Blast"),
             AutoAttack(ReconSpecialist, Shot, "Shot"),
-            ScriptHandledOnce(ReconSpecialist, CallReinforcements, first: 6d, range: 40f, 0, "Call Reinforcements (the alarm)"),
+            ScriptHandledOnce(ReconSpecialist, CallReinforcements, first: 1d, range: 40f, 0, "Call Reinforcements (the alarm, on engaging: Teun, 5 Oct 2026)"),
             Special(ReconSpecialist, PrecisionBlast, first: 6d, every: 12d, range: 26f, CreatureSpellTarget.Victim, 1, "Precision Blast"),
             Special(ReconSpecialist, WildBarrage, first: 10d, every: 15d, range: 25f, CreatureSpellTarget.VictimPosition, 0, "Wild Barrage"),
 
@@ -195,6 +214,72 @@ namespace NexusForever.Game.Entity.Creature
             Special(ShatterforceResponsebot, Eradicate, first: 5d, every: 15d, range: 15f, CreatureSpellTarget.Victim, 2, "Eradicate"),
             Special(ShatterforceResponsebot, Exterminate, first: 12d, every: 25d, range: 15f, CreatureSpellTarget.VictimPosition, 0, "Exterminate"),
             Special(ShatterforceResponsebot, RockEm, first: 8d, every: 20d, range: 15f, CreatureSpellTarget.Victim, 1, "Rock 'Em"),
+
+            // Dominion Ambusher (Breach of Protocol's ambush): Jabbithole lists Shell Storm and Mortar Barrage, so a rifle
+            // like the Soldier (Plasma Shot is a guess)
+            AutoAttack(DominionAmbusher, PlasmaShot, "Plasma Shot"),
+            Special(DominionAmbusher, ShellStorm, first: 6d, every: 12d, range: 15f, CreatureSpellTarget.Victim, 1, "Shell Storm"),
+            Special(DominionAmbusher, MortarBarrage, first: 8d, every: 20d, range: 30f, CreatureSpellTarget.VictimPosition, 0, "Mortar Barrage"),
+
+            // Dominion Techsmith (Jailbreak): 2H hammer, Clobber/Smash, Crushing Flurry (3.5 s, several hits, 10 m)
+            AutoAttack(DominionTechsmith, Clobber, "Clobber"),
+            AutoAttack(DominionTechsmith, HammerSmash, "Smash"),
+            Special(DominionTechsmith, CrushingFlurry, first: 6d, every: 14d, range: 10f, CreatureSpellTarget.Victim, 0, "Crushing Flurry"),
+
+            // Field Intelligence Agent (The Keymaster): 2H sword like the Gatekeeper (Jabbithole)
+            AutoAttack(FieldIntelligenceAgent, GatekeeperSlice, "Slice"),
+            AutoAttack(FieldIntelligenceAgent, GatekeeperSlash, "Slash"),
+            Special(FieldIntelligenceAgent, TripleThreat, first: 6d, every: 12d, range: 5f, CreatureSpellTarget.Victim, 1, "Triple Threat"),
+            Special(FieldIntelligenceAgent, DemolitionShout, first: 10d, every: 20d, range: 6f, CreatureSpellTarget.Victim, 0, "Demolition Shout"),
+
+            // Intelligence Recovery Agents (The Keymaster's waves): Jabbithole merges all four ids under one name with a
+            // sword kit and a pistol kit; which id has which is a guess: the leaders swords, the agents pistols
+            AutoAttack(RecoveryLeaderWaveOne, GatekeeperSlice, "Slice"),
+            AutoAttack(RecoveryLeaderWaveOne, GatekeeperSlash, "Slash"),
+            Special(RecoveryLeaderWaveOne, TripleThreat, first: 6d, every: 12d, range: 5f, CreatureSpellTarget.Victim, 1, "Triple Threat"),
+            Special(RecoveryLeaderWaveOne, DemolitionShout, first: 10d, every: 20d, range: 6f, CreatureSpellTarget.Victim, 0, "Demolition Shout"),
+            AutoAttack(RecoveryLeaderWaveTwo, GatekeeperSlice, "Slice"),
+            AutoAttack(RecoveryLeaderWaveTwo, GatekeeperSlash, "Slash"),
+            Special(RecoveryLeaderWaveTwo, TripleThreat, first: 6d, every: 12d, range: 5f, CreatureSpellTarget.Victim, 1, "Triple Threat"),
+            Special(RecoveryLeaderWaveTwo, DemolitionShout, first: 10d, every: 20d, range: 6f, CreatureSpellTarget.Victim, 0, "Demolition Shout"),
+            AutoAttack(RecoveryAgentWaveOne, Blast, "Blast"),
+            AutoAttack(RecoveryAgentWaveOne, Shot, "Shot"),
+            Special(RecoveryAgentWaveOne, PrecisionBlast, first: 6d, every: 12d, range: 26f, CreatureSpellTarget.Victim, 1, "Precision Blast"),
+            Special(RecoveryAgentWaveOne, WildBarrage, first: 10d, every: 15d, range: 25f, CreatureSpellTarget.VictimPosition, 0, "Wild Barrage"),
+            AutoAttack(RecoveryAgentWaveTwo, Blast, "Blast"),
+            AutoAttack(RecoveryAgentWaveTwo, Shot, "Shot"),
+            Special(RecoveryAgentWaveTwo, PrecisionBlast, first: 6d, every: 12d, range: 26f, CreatureSpellTarget.Victim, 1, "Precision Blast"),
+            Special(RecoveryAgentWaveTwo, WildBarrage, first: 10d, every: 15d, range: 25f, CreatureSpellTarget.VictimPosition, 0, "Wild Barrage"),
+
+            // Dominion Rocketeer (Jailbreak's drop-ins on the blimp): pistols, Precision Blast, Wild Barrage (Jabbithole)
+            AutoAttack(DominionRocketeer, Blast, "Blast"),
+            AutoAttack(DominionRocketeer, Shot, "Shot"),
+            Special(DominionRocketeer, PrecisionBlast, first: 6d, every: 12d, range: 26f, CreatureSpellTarget.Victim, 1, "Precision Blast"),
+            Special(DominionRocketeer, WildBarrage, first: 10d, every: 15d, range: 25f, CreatureSpellTarget.VictimPosition, 0, "Wild Barrage"),
+
+            // Dominion Guardbot (All Aboard's waves): Electric Shot, Chain Gun (cone 15 m, 1.75 s), Default Attack Sequence
+            // (3.5 s, several hits, 12 m)
+            AutoAttack(DominionGuardbot, ElectricShot, "Electric Shot"),
+            Special(DominionGuardbot, ChainGun, first: 5d, every: 12d, range: 15f, CreatureSpellTarget.Victim, 1, "Chain Gun"),
+            Special(DominionGuardbot, AttackSequence, first: 8d, every: 16d, range: 12f, CreatureSpellTarget.Victim, 0, "Default Attack Sequence"),
+
+            // Arsenax Severus in Breach of Protocol's ambush: 2H sword, Onslaught (half circle in front, 6 m, several hits);
+            // his health floor and leaving stay in ArsenaxAmbushEntityScript / the mission script
+            AutoAttack(ArsenaxAmbush, GatekeeperSlice, "Slice"),
+            AutoAttack(ArsenaxAmbush, GatekeeperSlash, "Slash"),
+            Special(ArsenaxAmbush, Onslaught, first: 5d, every: 10d, range: 6f, CreatureSpellTarget.Victim, 0, "Onslaught"),
+
+            // Suppressionbot Mk. II (All Aboard's last wave): the Responsebot's kit (Jabbithole; Carpet Bombing and the second
+            // Eradicate/Exterminate are their proxies), a little faster as the boss (a guess); the orbital barrages stay
+            // scripted in the mission
+            AutoAttack(SuppressionbotMk2, Smash, "Smash"),
+            AutoAttack(SuppressionbotMk2, Swipe, "Swipe"),
+            Special(SuppressionbotMk2, Eradicate, first: 5d, every: 12d, range: 15f, CreatureSpellTarget.Victim, 2, "Eradicate"),
+            Special(SuppressionbotMk2, Exterminate, first: 10d, every: 20d, range: 15f, CreatureSpellTarget.VictimPosition, 0, "Exterminate"),
+            Special(SuppressionbotMk2, RockEm, first: 8d, every: 16d, range: 15f, CreatureSpellTarget.Victim, 1, "Rock 'Em"),
+
+            // "Twitchy" Groo: only his rifle auto attack (Jabbithole); his abilities stay in The Science of Revenge's rotation
+            AutoAttack(TwitchyGroo, PlasmaShot, "Plasma Shot"),
         ];
 
         public IEnumerable<ICreatureSpell> GetCreatureSpells()
