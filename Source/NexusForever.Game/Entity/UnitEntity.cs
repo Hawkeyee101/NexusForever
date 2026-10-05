@@ -9,6 +9,7 @@ using NexusForever.Game.Abstract.Spell.Proc;
 using NexusForever.Game.Abstract.Spell.Target;
 using NexusForever.Game.Combat;
 using NexusForever.Game.Combat.CrowdControl;
+using NexusForever.Game.Spell.Type;
 using NexusForever.Game.Static;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.PublicEvent;
@@ -24,11 +25,14 @@ using NexusForever.Script;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Collection;
 using NexusForever.Shared;
+using NLog;
 
 namespace NexusForever.Game.Entity
 {
     public abstract class UnitEntity : WorldEntity, IUnitEntity
     {
+        private static readonly ILogger log = LogManager.GetCurrentClassLogger();
+
         public float HitRadius { get; protected set; } = 1f;
 
         /// <summary>
@@ -453,9 +457,20 @@ namespace NexusForever.Game.Entity
             if (parameters.ClientSideInteraction != null)
                 castMethod = CastMethod.ClientSideInteraction;
 
+            // PressHold and Transactional spells have no implementation yet, fail the cast instead of throwing
             ISpell spell = spellFactory.CreateSpell(castMethod);
             if (spell == null)
-                throw new ArgumentNullException();
+            {
+                log.Warn($"Unable to cast spell {parameters.SpellInfo.Entry.Id}, cast method {castMethod} isn't implemented.");
+                return;
+            }
+
+            // only the threshold cast methods (RapidTap, ChargeRelease) handle thresholds
+            if (spell is not SpellThreshold && parameters.SpellInfo.Thresholds.Count > 0)
+            {
+                log.Warn($"Unable to cast spell {parameters.SpellInfo.Entry.Id}, it has thresholds but cast method {castMethod} doesn't support them.");
+                return;
+            }
 
             spell.Initialise(this, parameters);
             if (!spell.Cast())

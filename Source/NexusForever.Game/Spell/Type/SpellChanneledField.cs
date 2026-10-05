@@ -7,7 +7,14 @@ using NexusForever.Game.Static.Spell;
 
 namespace NexusForever.Game.Spell.Type
 {
-    public class SpellChanneledField : Spell
+    /// <summary>
+    /// A channel on a field (e.g. a ground area) rather than on a target.
+    /// </summary>
+    /// <remarks>
+    /// Executes like a <see cref="SpellChanneled"/> for now, which at least lets the spell execute and finish instead of
+    /// staying in its initiating state forever (an NPC casting one never did anything else again).
+    /// </remarks>
+    public class SpellChanneledField : SpellChanneled
     {
         public override CastMethod CastMethod => CastMethod.ChanneledField;
 

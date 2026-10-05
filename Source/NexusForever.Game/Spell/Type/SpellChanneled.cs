@@ -15,10 +15,10 @@ namespace NexusForever.Game.Spell.Type
 
         #region Dependency Injection
 
-        private readonly ILogger<SpellChanneled> log;
+        private readonly ILogger log;
 
         public SpellChanneled(
-            ILogger<SpellChanneled> log,
+            ILogger log,
             ISpellTargetInfoCollection spellTargetInfoCollection,
             IGlobalSpellManager globalSpellManager,
             ICastResultValidatorManager castResultValidatorManager,
@@ -48,7 +48,10 @@ namespace NexusForever.Game.Spell.Type
             })); // Execute after initial delay
             events.EnqueueEvent(new SpellEvent(Parameters.SpellInfo.Entry.ChannelMaxTime / 1000d, Finish)); // End Spell Cast
 
-            uint numberOfPulses = (uint)MathF.Floor(Parameters.SpellInfo.Entry.ChannelMaxTime / Parameters.SpellInfo.Entry.ChannelPulseTime); // Calculate number of "ticks" in this spell cast
+            // Calculate number of "ticks" in this spell cast, a channel without a pulse time only executes once
+            uint numberOfPulses = Parameters.SpellInfo.Entry.ChannelPulseTime > 0
+                ? Parameters.SpellInfo.Entry.ChannelMaxTime / Parameters.SpellInfo.Entry.ChannelPulseTime
+                : 0u;
 
             // Add ticks at each pulse
             for (int i = 1; i <= numberOfPulses; i++)
