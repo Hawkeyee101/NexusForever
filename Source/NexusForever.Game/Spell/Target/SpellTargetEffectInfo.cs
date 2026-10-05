@@ -6,6 +6,7 @@ using NexusForever.Game.Abstract.Spell.Target;
 using NexusForever.Game.Static.Spell;
 using NexusForever.Game.Static.Spell.Effect;
 using NexusForever.GameTable.Model;
+using NexusForever.Network.World.Combat;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Network.World.Message.Model.Shared;
 using NexusForever.Shared.Game;
@@ -36,6 +37,19 @@ namespace NexusForever.Game.Spell.Target
         public IDamageDescription Damage { get; private set; }
 
         private UpdateTimer duration;
+        private UpdateTimer tick;
+
+        // effects that are applied again every tick while their duration runs (damage and heal over time), other effect
+        // types with a tick time either handle it themselves (proxies) or would stack when applied again
+        private static readonly HashSet<SpellEffectType> periodicEffectTypes =
+        [
+            SpellEffectType.Damage,
+            SpellEffectType.DistanceDependentDamage,
+            SpellEffectType.DistributedDamage,
+            SpellEffectType.Transference,
+            SpellEffectType.Heal,
+            SpellEffectType.VitalModifier
+        ];
 
         #region Dependency Injection
 
@@ -71,6 +85,12 @@ namespace NexusForever.Game.Spell.Target
             if (!entry.Flags.HasFlag(SpellEffectFlags.CancelOnly))
                 duration = new UpdateTimer(TimeSpan.FromMilliseconds(entry.DurationTime + entry.DelayTime));
 
+            // auras apply their periodic effects again themselves
+            if (entry.TickTime > 0
+                && periodicEffectTypes.Contains(entry.EffectType)
+                && target.Collection.Spell.CastMethod != CastMethod.Aura)
+                tick = new UpdateTimer(TimeSpan.FromMilliseconds(entry.TickTime));
+
             log.LogTrace($"Initalised effect {Entry.EffectType} for target {Target.Guid} for spell {Target.Collection.Spell.Spell4Id}");
         }
 
@@ -87,7 +107,74 @@ namespace NexusForever.Game.Spell.Target
 
             duration?.Update(lastTick);
             if (duration != null && duration.HasElapsed)
+            {
                 Finish();
+                return;
+            }
+
+            if (tick == null)
+                return;
+
+            tick.Update(lastTick);
+            if (tick.HasElapsed)
+            {
+                Tick();
+                tick.Reset();
+            }
+        }
+
+        /// <summary>
+        /// Apply a periodic effect again, the first application was its execution.
+        /// </summary>
+        private void Tick()
+        {
+            IUnitEntity target = Target.GetTarget();
+            if (target is not { IsAlive: true })
+                return;
+
+            var executionContext = new SpellExecutionContext();
+            executionContext.Initialise(Target.Collection.Spell, true);
+
+            try
+            {
+                if (spellEffectHandlerInvoker.InvokeApplyHandler(executionContext, target, this) != SpellEffectExecutionResult.Ok)
+                    return;
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, $"An exception occurred ticking effect {Entry.EffectType} for target {Target.Guid} for spell {Target.Collection.Spell.Spell4Id}!");
+                return;
+            }
+
+            // ticks aren't part of a ServerSpellGo, the damage of each tick goes out as a periodic combat log
+            foreach (ICombatLog combatLog in executionContext.GetCombatLogs())
+                target.EnqueueToVisible(new ServerCombatLog { CombatLog = combatLog }, true);
+
+            if (Damage != null && Damage.CombatResult != CombatResult.Avoid)
+                target.EnqueueToVisible(new ServerCombatLog
+                {
+                    CombatLog = new CombatLogDamage
+                    {
+                        MitigatedDamage = Damage.AdjustedDamage,
+                        RawDamage       = Damage.RawDamage,
+                        Shield          = Damage.ShieldAbsorbAmount,
+                        Absorption      = Damage.AbsorbedAmount,
+                        Overkill        = Damage.OverkillAmount,
+                        BKilled         = Damage.KilledTarget,
+                        BPeriodic       = true,
+                        DamageType      = Damage.DamageType,
+                        EffectType      = Entry.EffectType,
+                        CastData        = new CombatLogCastData
+                        {
+                            CasterId     = Target.Collection.Spell.Caster.Guid,
+                            TargetId     = target.Guid,
+                            SpellId      = Target.Collection.Spell.Spell4Id,
+                            CombatResult = Damage.CombatResult
+                        }
+                    }
+                }, true);
+
+            log.LogTrace($"Ticked effect {Entry.EffectType} for target {Target.Guid} for spell {Target.Collection.Spell.Spell4Id}");
         }
 
         public EffectInfo Build()
