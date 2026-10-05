@@ -315,7 +315,9 @@ namespace NexusForever.Game.Entity
         /// </summary>
         public ISpell GetSpellBySpellId(uint spellId)
         {
-            return spells.Values.SingleOrDefault(s => s.Spell4Id == spellId);
+            // a spell cast this tick is still pending until the next update
+            return spells.Values.SingleOrDefault(s => s.Spell4Id == spellId)
+                ?? pendingSpells.FirstOrDefault(s => s.Spell4Id == spellId);
         }
 
         /// <summary>

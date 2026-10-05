@@ -247,9 +247,11 @@ namespace NexusForever.Game.Spell
                 // auras summon their positional unit themselves, they only start casting once it is on the map
                 if (CastMethod != CastMethod.Aura)
                     SummonPositionalUnit();
-
-                InitialiseTelegraphs();
             }
+
+            // the spell start carries the telegraphs, attached to the caster (the client moves them with a moving player);
+            // without them a player's own casts showed no telegraph (Teun, since the first test)
+            InitialiseTelegraphs();
 
             // TODO: Fire Script's OnCast
 

@@ -3,11 +3,19 @@ using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Map.Search;
 using NexusForever.Game.Static.Reputation;
 using NexusForever.Game.Static.Spell;
+using NexusForever.GameTable;
 
 namespace NexusForever.Game.Map.Search
 {
     public class SearchCheckSpellTargetImplicit : ISearchCheckSpellTargetImplicit
     {
+        // the invisible units that anchor spells at a position (Spell4Base creature2IdPositionalAoe, e.g. 16623) are never
+        // targets: Mortar Barrage's damage hit the ones left at earlier landings (5 Oct 2026)
+        private static readonly Lazy<HashSet<uint>> positionalUnitCreatureIds = new(() => GameTableManager.Instance.Spell4Base.Entries
+            .Select(e => e.Creature2IdPositionalAoe)
+            .Where(id => id != 0u)
+            .ToHashSet());
+
         private Vector3 vector;
         private float radius;
         private IUnitEntity searcher;
@@ -28,6 +36,9 @@ namespace NexusForever.Game.Map.Search
         {
             // TODO: this should probably be split into multiple as this method might get too large
             if (!entity.IsAlive)
+                return false;
+
+            if (positionalUnitCreatureIds.Value.Contains(entity.CreatureId))
                 return false;
 
             if (radius > 0 && Vector3.Distance(vector, entity.Position) > radius)

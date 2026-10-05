@@ -38,8 +38,9 @@ namespace NexusForever.Game.Spell
                 PrimaryTargetId = Target.Guid,
                 UserInitiatedSpellCast = parentParameters.UserInitiatedSpellCast,
                 // a ground targeted parent passes on where it lands (e.g. Mortar Barrage's 69305 to its damage 69344), not its
-                // positional unit, which goes when the parent finishes
-                TargetPosition = ParentSpell.TargetPosition.HasValue ? new Position(ParentSpell.TargetPosition.Value) : parentParameters.TargetPosition,
+                // positional unit, which goes when the parent finishes; any other parent's proxies aim at their own target as
+                // they're cast (Mortar Barrage 66283's four shells all landed on the first spot, Teun 5 Oct 2026)
+                TargetPosition = ParentSpell.TargetPosition.HasValue ? new Position(ParentSpell.TargetPosition.Value) : null,
                 IsProxy = true
             };
         }
