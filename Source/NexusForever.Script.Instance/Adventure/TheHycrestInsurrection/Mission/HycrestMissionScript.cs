@@ -76,6 +76,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         }
 
         /// <summary>
+        /// Invoked when a creature's AI on the map picks a script-handled spell from its spell list (e.g. a Recon
+        /// Specialist's Call Reinforcements, routed to the mission's alarm).
+        /// </summary>
+        public virtual void OnCreatureSpell(IUnitEntity caster, IUnitEntity target, uint spell4Id)
+        {
+        }
+
+        /// <summary>
         /// Return true if <paramref name="entity"/> was spawned or created for this mission.
         /// </summary>
         protected bool IsOwnEntity(IGridEntity entity)

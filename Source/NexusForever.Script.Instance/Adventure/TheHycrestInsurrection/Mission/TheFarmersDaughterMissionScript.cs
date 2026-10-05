@@ -195,6 +195,16 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
 
         /// <summary>
+        /// Invoked when a creature's AI picks a script-handled spell: a Recon Specialist's Call Reinforcements from the
+        /// creature spell list goes to this mission's alarm (once per specialist, not while the alarm is running).
+        /// </summary>
+        public override void OnCreatureSpell(IUnitEntity caster, IUnitEntity target, uint spell4Id)
+        {
+            if (!publicEvent.HasFinished)
+                alarm.OnCreatureSpell(caster, target, spell4Id);
+        }
+
+        /// <summary>
         /// Invoked each world tick with the delta since the previous tick occurred.
         /// </summary>
         public override void Update(double lastTick)

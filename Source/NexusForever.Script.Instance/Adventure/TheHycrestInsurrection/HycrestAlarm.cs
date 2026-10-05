@@ -85,6 +85,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private AlarmState state;
         // references, spawned entities only get a guid once they are on the map
         private IUnitEntity specialist;
+        // specialists that already called (the mission's engage call, the kill-count alarm, the creature spell list): each
+        // calls at most once
+        private readonly HashSet<IUnitEntity> called = [];
         private IUnitEntity flare;
         private uint targetGuid;
         private ISpell callSpell;
@@ -135,6 +138,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             if (specialist == null)
                 return;
 
+            called.Add(specialist);
+
             targetGuid     = target.Guid;
             state          = AlarmState.Calling;
             callSpell      = null;
@@ -160,7 +165,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         /// </summary>
         public void TriggerWith(IUnitEntity unit, IPlayer target)
         {
-            if (IsActive || unit is not { InWorld: true, IsAlive: true })
+            if (IsActive || unit is not { InWorld: true, IsAlive: true } || target == null || !called.Add(unit))
                 return;
 
             flare        = null;
@@ -173,6 +178,23 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             SendCommunicator(VesnaFlare, VesnaFlareDurationMs);
             log.LogInformation($"Hycrest: alarm, the Recon Specialist at {unit.Position} calls reinforcements.");
+        }
+
+        /// <summary>
+        /// A creature's AI picked a script-handled spell from its spell list (the public event hook): a Recon
+        /// Specialist's Call Reinforcements sets off this alarm, unless it is already running or he already called.
+        /// </summary>
+        public void OnCreatureSpell(IUnitEntity caster, IUnitEntity target, uint spell4Id)
+        {
+            if (spell4Id != CallReinforcements || caster.CreatureId != ReconSpecialist || caster.Map != mapInstance)
+                return;
+
+            IPlayer player = target as IPlayer
+                ?? mapInstance.GetPlayers()
+                    .Where(p => p.IsAlive)
+                    .OrderBy(p => Vector3.Distance(p.Position, caster.Position))
+                    .FirstOrDefault();
+            TriggerWith(caster, player);
         }
 
         public void Update(double lastTick)

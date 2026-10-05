@@ -77,6 +77,14 @@ namespace NexusForever.Script.Template
         }
 
         /// <summary>
+        /// Invoked when a creature's AI on the map picks a script-handled spell from its spell list (no cast happens):
+        /// <paramref name="caster"/> wants to use <paramref name="spell4Id"/> on <paramref name="target"/>.
+        /// </summary>
+        void OnCreatureSpell(IUnitEntity caster, IUnitEntity target, uint spell4Id)
+        {
+        }
+
+        /// <summary>
         /// Invoked when a vote on the public event has finished.
         /// </summary>
         void OnVoteFinished(uint voteId, uint winner)

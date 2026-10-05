@@ -218,6 +218,19 @@ namespace NexusForever.Script.Main.AI
                         continue;
                 }
 
+                // no interval: once per fight
+                double readyIn = state.Spell.IntervalMax == 0u
+                    ? double.MaxValue
+                    : RandomSeconds(state.Spell.IntervalMin, state.Spell.IntervalMax);
+
+                // handled by the map's public event scripts instead of a cast (e.g. a call for reinforcements)
+                if ((state.Spell.Flags & CreatureSpellFlags.ScriptHandled) != 0)
+                {
+                    entity.Map?.PublicEventManager?.OnCreatureSpell(entity, target, state.Spell.Spell4Id);
+                    state.ReadyIn = readyIn;
+                    return true;
+                }
+
                 // a new set of parameters for every cast
                 ISpellParameters spellParameters = spellParametersFactory.Resolve();
                 spellParameters.PrimaryTargetId = target.Guid;
@@ -233,7 +246,7 @@ namespace NexusForever.Script.Main.AI
                 entity.CastSpell(state.Spell.Spell4Id, spellParameters);
 
                 // also after a cast that didn't start, so a failing spell isn't retried every tick
-                state.ReadyIn = RandomSeconds(state.Spell.IntervalMin, state.Spell.IntervalMax);
+                state.ReadyIn = readyIn;
                 return true;
             }
 

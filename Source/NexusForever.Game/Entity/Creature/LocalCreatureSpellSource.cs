@@ -34,7 +34,7 @@ namespace NexusForever.Game.Entity.Creature
         /// when the target is within <paramref name="range"/> metres (0: the spell's own range).
         /// </summary>
         private static ICreatureSpell Special(uint creatureId, uint spell4Id, double first, double every, float range,
-            CreatureSpellTarget target, byte priority, string comment)
+            CreatureSpellTarget target, byte priority, string comment, float minRange = 0f)
         {
             return new CreatureSpell
             {
@@ -44,8 +44,30 @@ namespace NexusForever.Game.Entity.Creature
                 InitialDelayMax = Milliseconds(first + FirstJitter),
                 IntervalMin     = Milliseconds(every - EveryJitter),
                 IntervalMax     = Milliseconds(every + EveryJitter),
+                MinRange        = minRange,
                 MaxRange        = range,
                 Target          = target,
+                Priority        = priority,
+                Comment         = comment
+            };
+        }
+
+        /// <summary>
+        /// A spell the map's scripts handle instead of a cast, once per fight, <paramref name="first"/> seconds after the
+        /// pull, when the target is within <paramref name="range"/> metres.
+        /// </summary>
+        private static ICreatureSpell ScriptHandledOnce(uint creatureId, uint spell4Id, double first, float range, byte priority,
+            string comment)
+        {
+            return new CreatureSpell
+            {
+                CreatureId      = creatureId,
+                Spell4Id        = spell4Id,
+                Flags           = CreatureSpellFlags.ScriptHandled,
+                InitialDelayMin = Milliseconds(first - FirstJitter),
+                InitialDelayMax = Milliseconds(first + FirstJitter),
+                MaxRange        = range,
+                Target          = CreatureSpellTarget.Victim,
                 Priority        = priority,
                 Comment         = comment
             };
@@ -56,8 +78,8 @@ namespace NexusForever.Game.Entity.Creature
             return (uint)Math.Max(0d, seconds * 1000d);
         }
 
-        // Hycrest enemies (scripted ones stay out: Snipe, Call Reinforcements, the spotlights, Arsenax's kit, Groo, the
-        // Suppressionbot)
+        // Hycrest enemies (scripted ones stay out: the spotlights, Arsenax's kit, Groo, the Suppressionbot, All Aboard's
+        // roof snipers 26360)
         private const uint DominionScout              = 17856u;
         private const uint DominionSoldier            = 17857u;
         private const uint DominionEngineeringOfficer = 17949u;
@@ -76,6 +98,8 @@ namespace NexusForever.Game.Entity.Creature
         private const uint ShellStorm      = 66281u;
         private const uint Longshot        = 66282u;
         private const uint MortarBarrage   = 66283u;
+        private const uint Snipe           = 27324u;
+        private const uint CallReinforcements = 48499u;
         private const uint Slice           = 65715u;
         private const uint Dice            = 65716u;
         private const uint SlashingStrikes = 66353u;
@@ -102,11 +126,12 @@ namespace NexusForever.Game.Entity.Creature
         private static readonly ICreatureSpell[] spells =
         [
             // Dominion Scout: rifle, Shell Storm (cone 17 m / 34°), Longshot (line of boxes, 20 m), Mortar Barrage (ground
-            // circles at the target, 30 m); Snipe stays scripted (alarm/sniper)
+            // circles at the target, 30 m), Snipe (2.25 s aim, 6-60 m, knockdown; table cooldown 4 s)
             AutoAttack(DominionScout, PlasmaShot, "Plasma Shot"),
             Special(DominionScout, ShellStorm, first: 6d, every: 12d, range: 15f, CreatureSpellTarget.Victim, 1, "Shell Storm"),
             Special(DominionScout, Longshot, first: 10d, every: 18d, range: 20f, CreatureSpellTarget.Victim, 0, "Longshot"),
             Special(DominionScout, MortarBarrage, first: 8d, every: 20d, range: 30f, CreatureSpellTarget.VictimPosition, 0, "Mortar Barrage"),
+            Special(DominionScout, Snipe, first: 12d, every: 20d, range: 60f, CreatureSpellTarget.Victim, 0, "Snipe", minRange: 6f),
 
             // Dominion Soldier: rifle, Shell Storm, Mortar Barrage
             AutoAttack(DominionSoldier, PlasmaShot, "Plasma Shot"),
@@ -135,10 +160,12 @@ namespace NexusForever.Game.Entity.Creature
             Special(DominionScientist50466, Flametorch, first: 5d, every: 15d, range: 6f, CreatureSpellTarget.Victim, 1, "Flametorch"),
             Special(DominionScientist50466, NapalmGrenade, first: 10d, every: 20d, range: 20f, CreatureSpellTarget.VictimPosition, 0, "Napalm Grenade"),
 
-            // Dominion Recon Specialist: pistols, Precision Blast (narrow cone 26 m), Wild Barrage (circles at the target);
-            // Call Reinforcements stays scripted (the alarm)
+            // Dominion Recon Specialist: pistols, Precision Blast (narrow cone 26 m), Wild Barrage (circles at the target),
+            // Call Reinforcements (the flare): script handled, the Hycrest missions route it to their alarm (the engine
+            // can't summon the flare, drill and Rapid Response Team); once per fight
             AutoAttack(ReconSpecialist, Blast, "Blast"),
             AutoAttack(ReconSpecialist, Shot, "Shot"),
+            ScriptHandledOnce(ReconSpecialist, CallReinforcements, first: 6d, range: 40f, 0, "Call Reinforcements (the alarm)"),
             Special(ReconSpecialist, PrecisionBlast, first: 6d, every: 12d, range: 26f, CreatureSpellTarget.Victim, 1, "Precision Blast"),
             Special(ReconSpecialist, WildBarrage, first: 10d, every: 15d, range: 25f, CreatureSpellTarget.VictimPosition, 0, "Wild Barrage"),
 

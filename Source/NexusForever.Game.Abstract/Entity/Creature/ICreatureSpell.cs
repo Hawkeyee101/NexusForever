@@ -27,7 +27,7 @@ namespace NexusForever.Game.Abstract.Entity.Creature
         uint InitialDelayMax { get; }
 
         /// <summary>
-        /// Time between uses, in milliseconds (random between min and max). Ignored for auto attacks.
+        /// Time between uses, in milliseconds (random between min and max); 0 = once per fight. Ignored for auto attacks.
         /// </summary>
         uint IntervalMin { get; }
         uint IntervalMax { get; }

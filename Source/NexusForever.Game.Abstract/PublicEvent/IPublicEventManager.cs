@@ -67,6 +67,12 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void OnEntityInteract(IPlayer player, IWorldEntity entity);
 
         /// <summary>
+        /// Invoked when a creature's AI picks a script-handled spell from its spell list: the public event scripts on the
+        /// owner <see cref="IBaseMap"/> handle it instead of a cast.
+        /// </summary>
+        void OnCreatureSpell(IUnitEntity caster, IUnitEntity target, uint spell4Id);
+
+        /// <summary>
         /// Update any objective for any public event <see cref="IPlayer"/> is part of that meets the supplied <see cref="PublicEventObjectiveType"/>, objectId and count.
         /// </summary>
         void UpdateObjective(IPlayer player, PublicEventObjectiveType type, uint objectId, int count);
