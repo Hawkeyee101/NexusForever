@@ -81,14 +81,12 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         // spotlight targets (Automated Machine Gun - Spotlight Target): they move slowly along a lane and the machine gun
         // opens fire when a player walks into one. Retail: 46970 (Automated Machine Gun Fire, 6 m range, 5.5 s cooldown)
-        // pulses its damage proxy 46971 (10 m red telegraph, 3% health) for 5 s. The engine drops the proxy ticks (the
-        // multiphase spell finishes right away), so the script casts the proxy itself, once per channel pulse.
+        // pulses its damage proxy 46971 (10 m red telegraph, 3% health) every 500 ms for 5 s; the engine casts the
+        // pulses (periodic proxy), the script only decides when the gun opens fire.
         private const float SpotlightSpeed = 1.5f;
         private const float SpotlightRange = 6f;
         private const uint SpotlightFireSpell = 46970u;
-        private const uint SpotlightDamageSpell = 46971u;
         private static readonly TimeSpan SpotlightFireDuration = TimeSpan.FromSeconds(5);
-        private static readonly TimeSpan SpotlightPulseInterval = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan SpotlightCooldown = TimeSpan.FromSeconds(5.5);
 
         // tracking: a player within the aggro range pulls the spotlight off its lane towards them, slower than a running
@@ -330,7 +328,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             public double Cooldown;
             public double Firing;
-            public double NextPulse;
         }
 
         private void UpdateSpotlightMovement(IUnitEntity entity, Spotlight spotlight, double lastTick)
@@ -448,13 +445,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 state.Cooldown -= lastTick;
                 if (state.Firing > 0d)
                 {
-                    state.Firing    -= lastTick;
-                    state.NextPulse -= lastTick;
-                    if (state.NextPulse <= 0d)
-                    {
-                        state.NextPulse = SpotlightPulseInterval.TotalSeconds;
-                        CastSpotlightSpell(spotlight, SpotlightDamageSpell);
-                    }
+                    state.Firing -= lastTick;
                     continue;
                 }
 
@@ -464,10 +455,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 if (!mapInstance.GetPlayers().Any(p => p.IsAlive && Vector3.Distance(p.Position, spotlight.Position) <= SpotlightRange))
                     continue;
 
-                // the fire spell plays the machine gun, the pulses bring the telegraph and the damage
-                state.Cooldown  = SpotlightCooldown.TotalSeconds;
-                state.Firing    = SpotlightFireDuration.TotalSeconds;
-                state.NextPulse = 0d;
+                // the fire spell plays the machine gun, its pulses bring the telegraph and the damage
+                state.Cooldown = SpotlightCooldown.TotalSeconds;
+                state.Firing   = SpotlightFireDuration.TotalSeconds;
                 CastSpotlightSpell(spotlight, SpotlightFireSpell);
             }
         }

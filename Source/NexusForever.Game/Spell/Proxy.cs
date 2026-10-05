@@ -15,20 +15,27 @@ namespace NexusForever.Game.Spell
         public ISpell ParentSpell { get; }
         public bool CanCast { get; private set; } = false;
 
-        private ISpellParameters proxyParameters;
+        private readonly ISpellParameters parentParameters;
 
         public Proxy(IUnitEntity target, ISpellEffectProxyData data, ISpell parentSpell, ISpellParameters parameters)
         {
             Target = target;
             Data = data;
             ParentSpell = parentSpell;
+            parentParameters = parameters;
+        }
 
-            proxyParameters = new SpellParameters
+        /// <summary>
+        /// Return new <see cref="ISpellParameters"/> for a cast of the proxy spell, every cast needs its own as the cast fills them in.
+        /// </summary>
+        private ISpellParameters BuildParameters()
+        {
+            return new SpellParameters
             {
-                ParentSpellInfo = parameters.SpellInfo,
-                RootSpellInfo = parameters.RootSpellInfo,
+                ParentSpellInfo = parentParameters.SpellInfo,
+                RootSpellInfo = parentParameters.RootSpellInfo,
                 PrimaryTargetId = Target.Guid,
-                UserInitiatedSpellCast = parameters.UserInitiatedSpellCast,
+                UserInitiatedSpellCast = parentParameters.UserInitiatedSpellCast,
                 IsProxy = true
             };
         }
@@ -55,40 +62,30 @@ namespace NexusForever.Game.Spell
 
             if (ParentSpell.CastMethod == CastMethod.Aura && Data.Entry.TickTime > 0)
             {
-                caster.CastSpell(Data.PeriodicSpellId, proxyParameters);
+                caster.CastSpell(Data.PeriodicSpellId, BuildParameters());
                 return;
             }
 
             if (Data.Entry.TickTime > 0)
             {
-                double tickTime = Data.Entry.TickTime;
-                if (Data.Entry.DurationTime > 0)
+                // the periodic spell is cast every tick for the duration of the effect (e.g. spotlight 46970 casts 46971
+                // every 500 ms for 5 s), without a duration it is cast MaxExecutions times, or once
+                uint tickTime = Data.Entry.TickTime;
+                uint ticks    = Data.Entry.DurationTime > 0 ? Data.Entry.DurationTime / tickTime : Math.Max(Data.MaxExecutions, 1u);
+                if (Data.MaxExecutions > 0)
+                    ticks = Math.Min(ticks, Data.MaxExecutions);
+
+                for (uint i = 1; i <= ticks; i++)
                 {
-                    for (int i = 1; i >= Data.Entry.DurationTime / tickTime; i++)
+                    events.EnqueueEvent(new SpellEvent(tickTime * i / 1000d, () =>
                     {
-                        events.EnqueueEvent(new SpellEvent(tickTime * i / 1000d, () =>
-                        {
-                            caster.CastSpell(Data.PeriodicSpellId, proxyParameters);
-                        }));
-                    }
-                }
-                else
-                    events.EnqueueEvent(TickingEvent(tickTime, () =>
-                    {
-                        caster.CastSpell(Data.PeriodicSpellId, proxyParameters);
+                        if (caster.IsAlive)
+                            caster.CastSpell(Data.PeriodicSpellId, BuildParameters());
                     }));
+                }
             }
             else
-                caster.CastSpell(Data.SpellId, proxyParameters);
-        }
-
-        private SpellEvent TickingEvent(double tickTime, Action action)
-        {
-            return new SpellEvent(tickTime / 1000d, () =>
-            {
-                action.Invoke();
-                TickingEvent(tickTime, action);
-            });
+                caster.CastSpell(Data.SpellId, BuildParameters());
         }
     }
 }
