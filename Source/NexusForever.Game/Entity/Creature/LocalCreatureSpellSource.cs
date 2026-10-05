@@ -34,12 +34,15 @@ namespace NexusForever.Game.Entity.Creature
         /// when the target is within <paramref name="range"/> metres (0: the spell's own range).
         /// </summary>
         private static ICreatureSpell Special(uint creatureId, uint spell4Id, double first, double every, float range,
-            CreatureSpellTarget target, byte priority, string comment, float minRange = 0f)
+            CreatureSpellTarget target, byte priority, string comment, float minRange = 0f,
+            CreatureSpellFlags flags = CreatureSpellFlags.None, uint tip = 0u)
         {
             return new CreatureSpell
             {
                 CreatureId      = creatureId,
                 Spell4Id        = spell4Id,
+                Flags           = flags,
+                TipTextId       = tip,
                 InitialDelayMin = Milliseconds(first - FirstJitter),
                 InitialDelayMax = Milliseconds(first + FirstJitter),
                 IntervalMin     = Milliseconds(every - EveryJitter),
@@ -150,7 +153,8 @@ namespace NexusForever.Game.Entity.Creature
             Special(DominionScout, ShellStorm, first: 6d, every: 12d, range: 15f, CreatureSpellTarget.Victim, 1, "Shell Storm"),
             Special(DominionScout, Longshot, first: 10d, every: 18d, range: 20f, CreatureSpellTarget.Victim, 0, "Longshot"),
             Special(DominionScout, MortarBarrage, first: 8d, every: 20d, range: 30f, CreatureSpellTarget.VictimPosition, 0, "Mortar Barrage"),
-            Special(DominionScout, Snipe, first: 1d, every: 20d, range: 60f, CreatureSpellTarget.Victim, 0, "Snipe (opens the fight: Teun, 5 Oct 2026)", minRange: 6f),
+            Special(DominionScout, Snipe, first: 1d, every: 20d, range: 60f, CreatureSpellTarget.Victim, 0, "Snipe (opens the fight; a dash interrupts it: Teun, 5 Oct 2026)", minRange: 6f,
+                flags: CreatureSpellFlags.InterruptOnTargetDash, tip: 249356u), // "Dash to interrupt a sniper's aim!"
 
             // Dominion Soldier: rifle, Shell Storm, Mortar Barrage
             AutoAttack(DominionSoldier, PlasmaShot, "Plasma Shot"),

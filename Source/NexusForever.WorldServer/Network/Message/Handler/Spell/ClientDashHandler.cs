@@ -11,6 +11,8 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Spell
             if (!SpellLookupManager.Instance.TryGetDashSpell(clientDash.Direction, out uint dashSpell4Id))
                 return;
 
+            session.Player.LastDash = System.DateTime.UtcNow;
+
             session.Player.CastSpell(dashSpell4Id, new SpellParameters
             {
                 UserInitiatedSpellCast = false

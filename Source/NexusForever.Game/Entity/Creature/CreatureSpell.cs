@@ -16,6 +16,7 @@ namespace NexusForever.Game.Entity.Creature
         public float MaxRange { get; init; }
         public CreatureSpellTarget Target { get; init; }
         public byte Priority { get; init; }
+        public uint TipTextId { get; init; }
         public string Comment { get; init; }
     }
 }

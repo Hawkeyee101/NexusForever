@@ -12,6 +12,9 @@ using NexusForever.Game.Static.Spell;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Entity;
+using NexusForever.Network.World.Message.Model;
+using NexusForever.Network.World.Message.Model.Shared;
+using NexusForever.Network.World.Message.Static;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter.Dynamic;
 using NexusForever.Shared;
@@ -35,10 +38,10 @@ namespace NexusForever.Script.Main.AI
         private const float MeleeGap = 1f;
 
         // chasers of one target spread over this many approach angles, about ApproachSpacing metres apart where they stop
-        // (15-40 degrees), so they stand close but not on top of each other (Teun, 5 Oct 2026; guesses)
+        // (3-40 degrees), so they stand close but not on top of each other (Teun, 5 Oct 2026; guesses)
         private const int ApproachAngles = 7;
-        private const float ApproachSpacing = 2.5f;
-        private const float ApproachAngleMin = MathF.PI / 12f;
+        private const float ApproachSpacing = 1.75f;   // Teun: 1.5-2 m between neighbours
+        private const float ApproachAngleMin = MathF.PI / 60f;
         private const float ApproachAngleMax = MathF.PI * 2f / 9f;
 
         // the closest range a ready special needs that the target is out of (e.g. Flametorch's 6 m for a rifleman who
@@ -47,6 +50,18 @@ namespace NexusForever.Script.Main.AI
 
         // the unit this creature turns to face outside of its casts
         private uint facingGuid;
+
+        // the spell list cast in progress that its target's dash interrupts (Snipe), its target and when it started
+        private ICreatureSpell dashInterruptSpell;
+        private uint dashInterruptTargetGuid;
+        private DateTime dashInterruptStart;
+
+        // a spell's tip waits a moment after the cast starts: sent in the same tick as the cast start it only showed in
+        // chat, not on screen like the alarm's (Teun, 5 Oct 2026; the delay is a guess)
+        private static readonly TimeSpan TipDelay = TimeSpan.FromSeconds(0.5);
+        private uint pendingTipPlayerGuid;
+        private uint pendingTipTextId;
+        private DateTime pendingTipAt;
         private readonly UpdateTimer chaseDistanceTimer = new(TimeSpan.FromSeconds(1f));
 
         /// <summary>
@@ -113,6 +128,9 @@ namespace NexusForever.Script.Main.AI
             if (!entity.TargetGuid.HasValue)
                 return;
 
+            CheckDashInterrupt();
+            SendPendingTip();
+
             // busy after a special (NpcExecutionDelay): no chase, no other cast
             if (entity.IsCasting() || entity.IsBusy)
                 return;
@@ -145,6 +163,46 @@ namespace NexusForever.Script.Main.AI
                 DoChase();
                 chaseDistanceTimer.Reset();
             }
+        }
+
+        /// <summary>
+        /// Interrupt a cast its target's dash interrupts (Snipe, "Dash to interrupt a sniper's aim!") once the target dashed
+        /// after it started.
+        /// </summary>
+        private void CheckDashInterrupt()
+        {
+            if (dashInterruptSpell == null)
+                return;
+
+            ISpell spell = entity.GetSpellBySpellId(dashInterruptSpell.Spell4Id);
+            if (spell == null || spell.IsFinished)
+            {
+                dashInterruptSpell = null;
+                return;
+            }
+
+            if (!spell.IsCasting)
+                return;
+
+            if (entity.Map.GetEntity<IPlayer>(dashInterruptTargetGuid) is IPlayer player && player.LastDash > dashInterruptStart)
+            {
+                spell.CancelCast(CastResult.SpellInterrupted);
+                dashInterruptSpell = null;
+            }
+        }
+
+        private void SendPendingTip()
+        {
+            if (pendingTipTextId == 0u || DateTime.UtcNow < pendingTipAt)
+                return;
+
+            if (entity.Map.GetEntity<IPlayer>(pendingTipPlayerGuid) is IPlayer player)
+                player.Session.EnqueueMessageEncrypted(new ServerRealmBroadcast
+                {
+                    Tier    = BroadcastTier.Medium,
+                    Message = gameTableManager.TextEnglish.GetEntry(pendingTipTextId) ?? string.Empty
+                });
+            pendingTipTextId = 0u;
         }
 
         private void DoAutoAttack()
@@ -275,6 +333,21 @@ namespace NexusForever.Script.Main.AI
 
                 entity.CastSpell(state.Spell.Spell4Id, spellParameters);
 
+                // the first time a player is this spell's target, its tip comes on screen (Snipe: Teun, from the retail video)
+                if (state.Spell.TipTextId != 0u && target is IPlayer tipped && tipped.TipsShown.Add(state.Spell.TipTextId))
+                {
+                    pendingTipPlayerGuid = tipped.Guid;
+                    pendingTipTextId     = state.Spell.TipTextId;
+                    pendingTipAt         = DateTime.UtcNow + TipDelay;
+                }
+
+                if ((state.Spell.Flags & CreatureSpellFlags.InterruptOnTargetDash) != 0)
+                {
+                    dashInterruptSpell      = state.Spell;
+                    dashInterruptTargetGuid = target.Guid;
+                    dashInterruptStart      = DateTime.UtcNow;
+                }
+
                 // also after a cast that didn't start, so a failing spell isn't retried every tick
                 state.ReadyIn = readyIn;
                 return true;
@@ -329,7 +402,8 @@ namespace NexusForever.Script.Main.AI
             float step  = Math.Clamp(ApproachSpacing / stop, ApproachAngleMin, ApproachAngleMax);
             float angle = ((int)(entity.Guid % ApproachAngles) - ApproachAngles / 2) * step;
             entity.MovementManager.Chase(target, stop, angle);
-            facingGuid = 0u;
+            // the chase already faces the target: sending the facing again mid-path made following jittery (Teun, 6 Oct 2026)
+            facingGuid = target.Guid;
         }
 
         /// <summary>

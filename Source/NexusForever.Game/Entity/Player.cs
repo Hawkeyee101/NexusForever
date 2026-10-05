@@ -66,6 +66,9 @@ namespace NexusForever.Game.Entity
 {
     public class Player : UnitEntity, IPlayer
     {
+        public DateTime LastDash { get; set; } = DateTime.MinValue;
+        public HashSet<uint> TipsShown { get; } = [];
+
         /// <summary>
         /// Determines which fields need saving for <see cref="IPlayer"/> when being saved to the database.
         /// </summary>

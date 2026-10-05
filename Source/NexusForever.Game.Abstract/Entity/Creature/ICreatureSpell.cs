@@ -46,6 +46,12 @@ namespace NexusForever.Game.Abstract.Entity.Creature
         byte Priority { get; }
 
         /// <summary>
+        /// A tip (text id) shown on screen to a player the first time they are this spell's target, 0 for none (e.g. Snipe's
+        /// "Dash to interrupt a sniper's aim!").
+        /// </summary>
+        uint TipTextId { get; }
+
+        /// <summary>
         /// The spell's name and where the row comes from.
         /// </summary>
         string Comment { get; }

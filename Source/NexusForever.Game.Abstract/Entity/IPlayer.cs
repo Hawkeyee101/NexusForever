@@ -22,6 +22,16 @@ namespace NexusForever.Game.Abstract.Entity
     {
         IAccount Account { get; }
 
+        /// <summary>
+        /// When the player last dashed (UTC), e.g. to interrupt a cast aimed at them.
+        /// </summary>
+        DateTime LastDash { get; set; }
+
+        /// <summary>
+        /// The tips (text ids) this player has been shown this session, each is shown once.
+        /// </summary>
+        HashSet<uint> TipsShown { get; }
+
         Identity Identity { get; }
         ulong CharacterId { get; }
         string Name { get; }
