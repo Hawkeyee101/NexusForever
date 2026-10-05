@@ -22,12 +22,15 @@ namespace NexusForever.Game.Prerequisite.Check
 
         public bool Meets(IUnitEntity subject, PrerequisiteComparison comparison, uint value, uint objectId, IPrerequisiteParameters parameters)
         {
+            // the combat state (1 in combat, 0 not) is compared with the value: "NotEqual 0" is in combat (Snipe's target
+            // check 24281), "Equal 0" out of combat
+            uint inCombat = subject.InCombat ? 1u : 0u;
             switch (comparison)
             {
                 case PrerequisiteComparison.Equal:
-                    return subject.InCombat;
+                    return inCombat == value;
                 case PrerequisiteComparison.NotEqual:
-                    return !subject.InCombat;
+                    return inCombat != value;
                 default:
                     log.LogWarning($"Unhandled PrerequisiteComparison {comparison} for {PrerequisiteType.InCombat}!");
                     return false;
