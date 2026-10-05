@@ -142,6 +142,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             423u, // The Great Escape: "Return to the Barn"
             424u, // The Keymaster: "Hide out in Ayita's Tavern in Hycrest"
+            425u, // Jailbreak: "Hide in the nearby Farmhouse outside the city" (2170, the Arcwulff Farmhouse)
             429u  // Clearance: "Meet with Ayita Sinnatus in the nearby farmhouse"
         };
 
