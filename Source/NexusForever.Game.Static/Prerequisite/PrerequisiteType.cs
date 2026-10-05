@@ -52,7 +52,7 @@
         InTargetGroup               = 44, // You cannot do that right now
         // 45 is unused in PrerequisiteType.tbl
         Waypoint                    = 46, // Incorrect waypoint direction
-        Unknown47                   = 47, // You cannot do that right now
+        ReturnsZero                 = 47, // You cannot do that right now (the client's check always yields 0; krakal)
         Unknown48                   = 48, // You cannot do that right now
         Schedule                    = 49, // That schedule is unavailable
         Unknown50                   = 50, // You cannot do that now
@@ -61,7 +61,7 @@
         PathEpisode                 = 53, // You do not meet the player path episode requirement
         PlayerPathMission           = 54, // You do not meet the player path mission requirement
         Unknown55                   = 55, // Requirements not met
-        Unknown56                   = 56, // Requirements not met
+        CCState                     = 56, // Requirements not met (UnitCCState: under the crowd control state given as the value)
         // 57 is unused in PrerequisiteType.tbl
         // 58 is unused in PrerequisiteType.tbl
         Spell59                     = 59, // Spell requirements not met
@@ -187,7 +187,7 @@
         ChallengeObject             = 176, // Challenge object requirement not met
         TrueLevel                   = 177, // True level requirement not met
         Item7                       = 178, // Item of type Equipped?
-        Unknown179                  = 179, // Requirements not met
+        CreatureDifficulty          = 179, // Requirements not met (the creature's Creature2Difficulty id, e.g. NPC spell rank variants; krakal)
         Unknown180                  = 180, // Requirements not met
         // 181 is unused in PrerequisiteType.tbl
         HouseOwnership              = 182, // Housing ownership requirement not met
