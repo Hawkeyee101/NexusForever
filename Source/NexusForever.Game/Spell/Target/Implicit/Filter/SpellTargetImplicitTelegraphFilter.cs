@@ -4,41 +4,51 @@ using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Abstract.Spell.Target.Implicit;
 using NexusForever.Game.Abstract.Spell.Target.Implicit.Filter;
 using NexusForever.Game.Static.Spell.Target;
+using NexusForever.Shared;
 
 namespace NexusForever.Game.Spell.Target.Implicit.Filter
 {
     public class SpellTargetImplicitTelegraphFilter : ISpellTargetImplicitTelegraphFilter
     {
-        private ITelegraph telegraph;
-        private IUnitEntity caster;
+        private readonly List<ISearchCheckTelegraph> searchChecks = [];
+        private bool initialised;
 
         #region Dependency Injection
 
-        private readonly ISearchCheckTelegraph searchCheckTelegraph;
+        private readonly IFactory<ISearchCheckTelegraph> searchCheckTelegraphFactory;
 
         public SpellTargetImplicitTelegraphFilter(
-            ISearchCheckTelegraph searchCheckTelegraph)
+            IFactory<ISearchCheckTelegraph> searchCheckTelegraphFactory)
         {
-            this.searchCheckTelegraph = searchCheckTelegraph;
+            this.searchCheckTelegraphFactory = searchCheckTelegraphFactory;
         }
 
         #endregion
 
-        public void Initialise(ITelegraph telegraph, IUnitEntity caster)
+        public void Initialise(IEnumerable<ITelegraph> telegraphs, IUnitEntity caster)
         {
-            if (this.telegraph != null)
+            if (initialised)
                 throw new InvalidOperationException("SpellTargetImplicitTelegraphFilter has already been initialised.");
 
-            this.telegraph = telegraph;
-            this.caster    = caster;
+            initialised = true;
 
-            searchCheckTelegraph.Initialise(telegraph, caster);
+            foreach (ITelegraph telegraph in telegraphs)
+            {
+                ISearchCheckTelegraph searchCheck = searchCheckTelegraphFactory.Resolve();
+                searchCheck.Initialise(telegraph, caster);
+                searchChecks.Add(searchCheck);
+            }
         }
 
         public void Filter(List<ISpellTargetImplicit> targets)
         {
+            if (searchChecks.Count == 0)
+                return;
+
+            // the telegraphs of a spell together make up its area, a target inside any of them is hit
+            // (e.g. Shell Storm 66281 is a small circle around the caster plus a cone in front of it)
             foreach (ISpellTargetImplicit target in targets)
-                if (!searchCheckTelegraph.CheckEntity(target.Entity))
+                if (!searchChecks.Any(c => c.CheckEntity(target.Entity)))
                     target.Result = SpellTargetImplicitSelectionResult.OutsideTelegraph;
         }
 

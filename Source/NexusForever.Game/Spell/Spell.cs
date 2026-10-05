@@ -550,12 +550,9 @@ namespace NexusForever.Game.Spell
 
             InitialiseTelegraphs();
 
-            foreach (ITelegraph telegraph in telegraphs)
-            {
-                var telegraphFilter = LegacyServiceProvider.Provider.GetService<ISpellTargetImplicitTelegraphFilter>();
-                telegraphFilter.Initialise(telegraph, Caster);
-                telegraphFilter.Filter(implicitTargets);
-            }
+            var telegraphFilter = LegacyServiceProvider.Provider.GetService<ISpellTargetImplicitTelegraphFilter>();
+            telegraphFilter.Initialise(telegraphs, Caster);
+            telegraphFilter.Filter(implicitTargets);
 
             var constraintFilter = LegacyServiceProvider.Provider.GetService<ISpellTargetImplicitConstraintFilter>();
             constraintFilter.Initialise(Parameters.SpellInfo.AoeTargetConstraints);
