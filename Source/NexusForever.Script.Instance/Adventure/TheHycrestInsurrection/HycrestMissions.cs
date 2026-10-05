@@ -141,6 +141,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public static readonly IReadOnlySet<uint> EndsAtHideout = new HashSet<uint>
         {
             423u, // The Great Escape: "Return to the Barn"
+            424u, // The Keymaster: "Hide out in Ayita's Tavern in Hycrest"
             429u  // Clearance: "Meet with Ayita Sinnatus in the nearby farmhouse"
         };
 

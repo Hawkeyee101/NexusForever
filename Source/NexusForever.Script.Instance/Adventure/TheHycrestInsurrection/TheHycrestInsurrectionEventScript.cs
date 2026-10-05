@@ -33,7 +33,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             [422u] = (PublicEventCreature.LysionSinnatus, 465552u, 444107u), // "Once we've compromised their shields..."
             // vote 46; Vesna says the families line in the retail video; communicators not known yet
             [423u] = (PublicEventCreature.VesnaTaranoft,  465556u, 0u),      // "Thank you. Those families deserve the chance..."
-            [424u] = (PublicEventCreature.VesnaTaranoft,  465557u, 0u),      // "Be careful as you move around the city..."
+            [424u] = (PublicEventCreature.VesnaTaranoft,  465557u, 444091u), // "Be careful as you move around the city..." / "...encryption codes, but to no avail." (both retail videos)
             [425u] = (PublicEventCreature.LysionSinnatus, 465558u, 0u),      // "Deliver my army to freedom..."
             // vote 48 (speaker inferred from the track)
             [429u] = (PublicEventCreature.AyitaSinnatus,  465559u, 444074u)  // "Dominion security is tight..." / "...special security clearance."
