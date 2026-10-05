@@ -1,5 +1,6 @@
 ﻿using NexusForever.Game.Abstract.Combat;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Entity.Creature;
 using NexusForever.Game.Abstract.Entity.Movement.Command;
 using NexusForever.Game.Abstract.Entity.Movement.Command.Position;
 using NexusForever.Game.Abstract.Spell;
@@ -9,6 +10,7 @@ using NexusForever.Game.Static.Reputation;
 using NexusForever.Game.Static.Spell;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
+using NexusForever.Network.World.Entity;
 using NexusForever.Script.Template;
 using NexusForever.Script.Template.Filter.Dynamic;
 using NexusForever.Shared;
@@ -29,17 +31,32 @@ namespace NexusForever.Script.Main.AI
         private float chaseDistance = 5f;
         private readonly UpdateTimer chaseDistanceTimer = new(TimeSpan.FromSeconds(1f));
 
+        /// <summary>
+        /// A spell from the creature's spell list (not an auto attack) and the seconds until it can be cast again.
+        /// </summary>
+        private class CreatureSpellState
+        {
+            public ICreatureSpell Spell;
+            public double ReadyIn;
+        }
+
+        private readonly List<CreatureSpellState> creatureSpells = [];
+        private bool wasInCombat;
+
         #region Dependency Injection
 
         private readonly IFactory<ISpellParameters> spellParametersFactory;
         private readonly IGameTableManager gameTableManager;
+        private readonly ICreatureSpellManager creatureSpellManager;
 
         public CombatAI(
             IFactory<ISpellParameters> spellParametersFactory,
-            IGameTableManager gameTableManager)
+            IGameTableManager gameTableManager,
+            ICreatureSpellManager creatureSpellManager = null)
         {
             this.spellParametersFactory = spellParametersFactory;
             this.gameTableManager = gameTableManager;
+            this.creatureSpellManager = creatureSpellManager;
         }
 
         #endregion
@@ -51,6 +68,18 @@ namespace NexusForever.Script.Main.AI
         {
             entity = owner;
             entity.SetInRangeCheck(15f);
+
+            // the creature → spell list: its auto attacks replace the default ones, the rest are cast when ready
+            IReadOnlyList<ICreatureSpell> spells = creatureSpellManager?.GetCreatureSpells(entity.CreatureId) ?? [];
+            List<uint> listAutoAttacks = spells
+                .Where(s => (s.Flags & CreatureSpellFlags.AutoAttack) != 0)
+                .Select(s => s.Spell4Id)
+                .ToList();
+            if (listAutoAttacks.Count > 0)
+                autoAttacks = listAutoAttacks;
+
+            foreach (ICreatureSpell spell in spells.Where(s => (s.Flags & CreatureSpellFlags.AutoAttack) == 0))
+                creatureSpells.Add(new CreatureSpellState { Spell = spell });
         }
 
         /// <summary>
@@ -60,6 +89,8 @@ namespace NexusForever.Script.Main.AI
         {
             if (!entity.IsAlive)
                 return;
+
+            UpdateCreatureSpellTimers(lastTick);
 
             if (!entity.TargetGuid.HasValue)
                 return;
@@ -73,6 +104,9 @@ namespace NexusForever.Script.Main.AI
 
         protected virtual void UpdateAI(double lastTick)
         {
+            if (TryCastCreatureSpell())
+                return;
+
             autoAttackTimer.Update(lastTick);
             if (autoAttackTimer.HasElapsed)
             {
@@ -100,8 +134,9 @@ namespace NexusForever.Script.Main.AI
             if (target == null)
                 return;
 
+            autoAttackIndex %= autoAttacks.Count;
             uint spell4Id = autoAttacks[autoAttackIndex];
-            autoAttackIndex = (autoAttackIndex++) % autoAttacks.Count;
+            autoAttackIndex = (autoAttackIndex + 1) % autoAttacks.Count;
 
             Spell4Entry spell4Entry = gameTableManager.Spell4.GetEntry(spell4Id);
             if (spell4Entry == null)
@@ -115,6 +150,116 @@ namespace NexusForever.Script.Main.AI
             ISpellParameters spellParameters = spellParametersFactory.Resolve();
             spellParameters.PrimaryTargetId = entity.TargetGuid.Value;
             entity.CastSpell(spell4Id, spellParameters);
+        }
+
+        /// <summary>
+        /// Count down the spell list's timers while in combat; entering combat starts them at their initial delays.
+        /// </summary>
+        private void UpdateCreatureSpellTimers(double lastTick)
+        {
+            if (creatureSpells.Count == 0)
+                return;
+
+            if (!entity.InCombat)
+            {
+                wasInCombat = false;
+                return;
+            }
+
+            if (!wasInCombat)
+            {
+                wasInCombat = true;
+                foreach (CreatureSpellState state in creatureSpells)
+                    state.ReadyIn = RandomSeconds(state.Spell.InitialDelayMin, state.Spell.InitialDelayMax);
+                return;
+            }
+
+            foreach (CreatureSpellState state in creatureSpells)
+                state.ReadyIn -= lastTick;
+        }
+
+        /// <summary>
+        /// Cast the first ready spell from the creature's spell list whose target is in range; return true if one was cast.
+        /// </summary>
+        private bool TryCastCreatureSpell()
+        {
+            if (creatureSpells.Count == 0 || !entity.TargetGuid.HasValue)
+                return false;
+
+            IUnitEntity victim = entity.Map.GetEntity<IUnitEntity>(entity.TargetGuid.Value);
+            if (victim == null)
+                return false;
+
+            foreach (CreatureSpellState state in creatureSpells)
+            {
+                if (state.ReadyIn > 0d)
+                    continue;
+
+                Spell4Entry spell4Entry = gameTableManager.Spell4.GetEntry(state.Spell.Spell4Id);
+                if (spell4Entry == null)
+                    continue;
+
+                float minRange = state.Spell.MinRange > 0f ? state.Spell.MinRange : spell4Entry.TargetMinRange;
+                float maxRange = state.Spell.MaxRange > 0f ? state.Spell.MaxRange : spell4Entry.TargetMaxRange;
+
+                IUnitEntity target = state.Spell.Target switch
+                {
+                    CreatureSpellTarget.Self                 => entity,
+                    CreatureSpellTarget.RandomHostileInRange => RandomHostileInRange(minRange, maxRange),
+                    _                                        => victim
+                };
+                if (target == null)
+                    continue;
+
+                if (target != entity)
+                {
+                    float distance = entity.Position.GetDistance(target.Position);
+                    if (distance < minRange || (maxRange > 0f && distance > maxRange))
+                        continue;
+                }
+
+                // a new set of parameters for every cast
+                ISpellParameters spellParameters = spellParametersFactory.Resolve();
+                spellParameters.PrimaryTargetId = target.Guid;
+                if (state.Spell.Target == CreatureSpellTarget.VictimPosition)
+                    spellParameters.TargetPosition = new Position(target.Position);
+
+                if (!entity.IsTurret && target != entity)
+                {
+                    entity.MovementManager.Finalise();
+                    entity.MovementManager.SetRotationFaceUnit(target.Guid);
+                }
+
+                entity.CastSpell(state.Spell.Spell4Id, spellParameters);
+
+                // also after a cast that didn't start, so a failing spell isn't retried every tick
+                state.ReadyIn = RandomSeconds(state.Spell.IntervalMin, state.Spell.IntervalMax);
+                return true;
+            }
+
+            return false;
+        }
+
+        private IUnitEntity RandomHostileInRange(float minRange, float maxRange)
+        {
+            List<IUnitEntity> inRange = entity.ThreatManager
+                .Select(h => entity.Map.GetEntity<IUnitEntity>(h.HatedUnitId))
+                .Where(u => u is { IsAlive: true })
+                .Where(u =>
+                {
+                    float distance = entity.Position.GetDistance(u.Position);
+                    return distance >= minRange && (maxRange <= 0f || distance <= maxRange);
+                })
+                .ToList();
+
+            return inRange.Count > 0 ? inRange[Random.Shared.Next(inRange.Count)] : null;
+        }
+
+        private static double RandomSeconds(uint minMs, uint maxMs)
+        {
+            if (maxMs < minMs)
+                maxMs = minMs;
+            return (minMs + Random.Shared.NextDouble() * (maxMs - minMs)) / 1000d;
         }
 
         private void DoChase()

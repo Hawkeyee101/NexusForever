@@ -71,6 +71,8 @@ namespace NexusForever.Game.Entity
             sc.AddTransientFactory<ICreatureInfo, CreatureInfo>();
             sc.AddTransientFactory<ICreatureInfoProperty, CreatureInfoProperty>();
             sc.AddTransientFactory<ICreatureInfoStat, CreatureInfoStat>();
+            sc.AddSingleton<ICreatureSpellManager, CreatureSpellManager>();
+            sc.AddSingleton<ICreatureSpellSource, LocalCreatureSpellSource>();
 
             sc.AddTransient<ICurrencyManager, CurrencyManager>();
             sc.AddTransient<IResurrectionManager, ResurrectionManager>();
