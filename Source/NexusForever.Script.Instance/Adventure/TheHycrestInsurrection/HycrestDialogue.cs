@@ -17,6 +17,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     /// <remarks>
     /// Lines are resolved to English text on the server.
     /// </remarks>
+    public enum CombatBark
+    {
+        EnterCombat,
+        Death,
+        Kill
+    }
+
     public partial class HycrestDialogue
     {
 
@@ -114,6 +121,30 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
 
             SendSay(speaker, GetText(textId), ChatChannelType.Say);
+        }
+
+        /// <summary>
+        /// One of the creature's combat barks (Creature2ActionText), with the table's chance, as a speech bubble. The engine
+        /// doesn't send action texts.
+        /// </summary>
+        public void BarkCombat(IUnitEntity unit, CombatBark kind)
+        {
+            Creature2Entry creature = unit != null ? gameTableManager.Creature2.GetEntry(unit.CreatureId) : null;
+            Creature2ActionTextEntry barks = creature != null ? gameTableManager.Creature2ActionText.GetEntry(creature.Creature2ActionTextId) : null;
+            if (barks == null)
+                return;
+
+            (uint[] lines, float chance) = kind switch
+            {
+                CombatBark.EnterCombat => ([barks.LocalizedTextIdOnEnterCombat00, barks.LocalizedTextIdOnEnterCombat01, barks.LocalizedTextIdOnEnterCombat02, barks.LocalizedTextIdOnEnterCombat03], barks.ChanceToSayOnEnterCombat),
+                CombatBark.Death       => ([barks.LocalizedTextIdOnDeath00, barks.LocalizedTextIdOnDeath01, barks.LocalizedTextIdOnDeath02, barks.LocalizedTextIdOnDeath03], barks.ChanceToSayOnDeath),
+                _                      => (new uint[] { barks.LocalizedTextIdOnKill00, barks.LocalizedTextIdOnKill01, barks.LocalizedTextIdOnKill02, barks.LocalizedTextIdOnKill03 }, barks.ChanceToSayOnKill)
+            };
+            lines = [.. lines.Where(l => l != 0u)];
+            if (lines.Length == 0 || Random.Shared.NextDouble() * 100d >= chance)
+                return;
+
+            Bark(unit, lines[Random.Shared.Next(lines.Length)]);
         }
 
         /// <summary>

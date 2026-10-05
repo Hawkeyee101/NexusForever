@@ -11,6 +11,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public const uint Regroup = 445u;
         public const uint Clearance = 429u;   // its Securitybots talk to the mission script
         public const uint AllAboard = 432u;   // its lever and drive system talk to the mission script
+        public const uint LevelingTheField = 422u;   // its Shield Parts crates talk to the mission script
 
         /// <summary>
         /// Join <see cref="IPlayer"/> to the public team of <see cref="IPublicEvent"/>, unless already a member or the event has finished.

@@ -63,9 +63,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly TimeSpan BlackScreen        = TimeSpan.FromSeconds(3); // HycrestInsurrectionOnEnter.BlackDuration
         private static readonly TimeSpan SyncDelay          = BlackScreen;
         private static readonly TimeSpan DawsonArrivalWait  = TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan Message1Delay      = BlackScreen + TimeSpan.FromSeconds(1.5);
-        private static readonly TimeSpan Message2Delay      = Message1Delay + TimeSpan.FromSeconds(8);
-        private static readonly TimeSpan DawsonAppearDelay  = Message2Delay + TimeSpan.FromSeconds(7);
+        // the Caretaker's lines start when the player's client reports the black screen has ended (a cinematic hides story
+        // text, and a slower client ends it later: on fixed timers the first line was sometimes lost). The second line waits
+        // until the first pop-up has closed, a line sent the moment the previous one closes didn't always show
+        private static readonly TimeSpan Message1AfterBlack = TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan Message2AfterBlack = Message1AfterBlack + TimeSpan.FromSeconds(8.5);
+        private static readonly TimeSpan NarrationFallback  = BlackScreen + TimeSpan.FromSeconds(5); // no "ended" from the client
+        private static readonly TimeSpan DawsonAppearDelay  = BlackScreen + Message2AfterBlack + TimeSpan.FromSeconds(7);
         private const uint DawsonPhase = 1u;
         private static readonly TimeSpan DawsonTalkFallback = TimeSpan.FromSeconds(60);
 
@@ -105,6 +109,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private uint hologramGuid;
         private bool dawsonAppearQueued;
         private bool flyInQueued;
+        private readonly HashSet<uint> awaitingNarration = [];
 
         #region Dependency Injection
 
@@ -290,8 +295,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
             actionQueue.Enqueue(SyncDelay, () => WithPlayer(guid, StartSync));
             actionQueue.Enqueue(SyncDelay + SyncDuration, () => WithPlayer(guid, EndSync));
-            actionQueue.Enqueue(Message1Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1)));
-            actionQueue.Enqueue(Message2Delay, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage2)));
+            awaitingNarration.Add(guid);
+            actionQueue.Enqueue(NarrationFallback, () => StartNarration(guid));
 
             if (!flyInQueued)
             {
@@ -364,6 +369,23 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             parameters.PrimaryTargetId        = player.Guid;
             parameters.UserInitiatedSpellCast = false;
             player.CastSpell(spell4Id, parameters);
+        }
+
+        /// <summary>
+        /// Invoked when a cinematic for <see cref="IPlayer"/> has finished.
+        /// </summary>
+        public void OnCinematicFinish(IPlayer player, uint cinematicId)
+        {
+            StartNarration(player.Guid);
+        }
+
+        private void StartNarration(uint guid)
+        {
+            if (!awaitingNarration.Remove(guid))
+                return;
+
+            actionQueue.Enqueue(Message1AfterBlack, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage1)));
+            actionQueue.Enqueue(Message2AfterBlack, () => WithPlayer(guid, p => PlayNarration(p, CaretakerMessage2)));
         }
 
         private void PlayNarration(IPlayer player, uint textId)

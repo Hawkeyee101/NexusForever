@@ -487,25 +487,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 unit.ThreatManager.UpdateThreat(target, 1);
         }
 
-        /// <summary>
-        /// One of the creature's combat barks (Creature2ActionText), with the table's chance, as a speech bubble.
-        /// </summary>
         private void Bark(IUnitEntity unit, bool enterCombat)
         {
-            Creature2Entry creature = gameTableManager.Creature2.GetEntry(unit.CreatureId);
-            Creature2ActionTextEntry barks = creature != null ? gameTableManager.Creature2ActionText.GetEntry(creature.Creature2ActionTextId) : null;
-            if (barks == null)
-                return;
-
-            uint[] lines = enterCombat
-                ? [barks.LocalizedTextIdOnEnterCombat00, barks.LocalizedTextIdOnEnterCombat01, barks.LocalizedTextIdOnEnterCombat02, barks.LocalizedTextIdOnEnterCombat03]
-                : [barks.LocalizedTextIdOnDeath00, barks.LocalizedTextIdOnDeath01, barks.LocalizedTextIdOnDeath02, barks.LocalizedTextIdOnDeath03];
-            lines = [.. lines.Where(l => l != 0u)];
-            float chance = enterCombat ? barks.ChanceToSayOnEnterCombat : barks.ChanceToSayOnDeath;
-            if (lines.Length == 0 || Random.Shared.NextDouble() * 100d >= chance)
-                return;
-
-            dialogue.Bark(unit, lines[Random.Shared.Next(lines.Length)]);
+            dialogue.BarkCombat(unit, enterCombat ? CombatBark.EnterCombat : CombatBark.Death);
         }
 
         private void Communicator(uint textId, uint creatureId)

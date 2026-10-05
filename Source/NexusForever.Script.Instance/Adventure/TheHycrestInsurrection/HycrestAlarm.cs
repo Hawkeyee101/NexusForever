@@ -34,7 +34,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint CallReinforcements = 48499u;
         private const uint Surface = 48564u;
 
-        private const uint SpecialistBark = 560790u; // "Wait until my friends show up."
+        // when he calls: "Wait until my friends show up." / "You'll be outnumbered soon!" (Teun's video, The Science of Revenge)
+        private static readonly uint[] SpecialistBarks = [560790u, 560792u];
         private const uint FlareTooltip = 458313u;   // "A Dominion Unit has released a signal flare, summoning a Rapid Response Team!"
         private const uint TeamTooltip = 458314u;    // "A Dominion Rapid Response Team has arrived nearby!"
         // Vesna's lines of communicators 5022/5023, sent as story communicators: the client shows a communicator message
@@ -153,6 +154,27 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             log.LogInformation($"Hycrest: alarm, Recon Specialist spawned at {position}.");
         }
 
+        /// <summary>
+        /// A Recon Specialist that was already standing in the field (<paramref name="unit"/>) calls reinforcements against
+        /// <paramref name="target"/>.
+        /// </summary>
+        public void TriggerWith(IUnitEntity unit, IPlayer target)
+        {
+            if (IsActive || unit is not { InWorld: true, IsAlive: true })
+                return;
+
+            flare        = null;
+            specialist   = unit;
+            targetGuid   = target.Guid;
+            state        = AlarmState.Calling;
+            callSpell    = null;
+            stateTimer   = CastDelay.TotalSeconds;
+            approachTime = 0d;
+
+            SendCommunicator(VesnaFlare, VesnaFlareDurationMs);
+            log.LogInformation($"Hycrest: alarm, the Recon Specialist at {unit.Position} calls reinforcements.");
+        }
+
         public void Update(double lastTick)
         {
             actionQueue.Update(lastTick);
@@ -222,7 +244,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
 
         private void StartCall()
         {
-            dialogue.Say(specialist, SpecialistBark, false);
+            dialogue.Say(specialist, SpecialistBarks[Random.Shared.Next(SpecialistBarks.Length)], false);
 
             IPlayer target = mapInstance.GetEntity<IPlayer>(targetGuid);
             if (target == null || !target.IsAlive)

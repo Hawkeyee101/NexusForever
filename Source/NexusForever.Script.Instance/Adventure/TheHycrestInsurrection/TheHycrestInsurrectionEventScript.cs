@@ -25,11 +25,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
     public class TheHycrestInsurrectionEventScript : IPublicEventScript, IOwnedScript<IPublicEvent>, IHycrestMainEventScript
     {
         // what happens when a mission wins its vote: the track's spokesperson gives the outcome line and the story
-        // communicator is the mission's setup message (known for the first vote; none for The Science of Revenge)
+        // communicator is the mission's setup message (known for the first vote)
         private static readonly Dictionary<uint, (PublicEventCreature Speaker, uint OutcomeText, uint CommunicatorText)> MissionOutcomes = new()
         {
             [420u] = (PublicEventCreature.AyitaSinnatus,  465550u, 444047u), // "Prema's father Tarquim is right outside..."
-            [421u] = (PublicEventCreature.VesnaTaranoft,  465551u, 0u),      // "Be quick about finding Groo..."
+            [421u] = (PublicEventCreature.VesnaTaranoft,  465551u, 444087u), // "Be quick about finding Groo..." / "...farmers going missing." (retail videos; 448087 follows from the mission)
             [422u] = (PublicEventCreature.LysionSinnatus, 465552u, 444107u), // "Once we've compromised their shields..."
             // vote 46; Vesna says the families line in the retail video; communicators not known yet
             [423u] = (PublicEventCreature.VesnaTaranoft,  465556u, 0u),      // "Thank you. Those families deserve the chance..."
@@ -118,6 +118,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly Vector3 DevStartSpot = new(-2259.5f, -924.3f, -1332f);   // All Aboard: in the Bell Farmhouse, by Ayita
         private static readonly TimeSpan DevTeleportDelay = TimeSpan.FromSeconds(4);
         private readonly HashSet<ulong> devTeleported = [];
+
+        // TEMPORARY dev shortcut (Teun, 3 Oct 2026, not for upstream): a fresh instance skips the intro and starts at the
+        // first vote (45) in the Abandoned Barn: night sky, players moved into the barn by Vesna, Ayita and Lysion, the vote
+        // a few seconds later. Ignored while DevStartMission is set. false = the normal run.
+        private const bool DevStartAtVote = true;
+        private static readonly Vector3 DevVoteSpot = new(-2525.34f, -925.82f, -1192.5f);
+        private static readonly TimeSpan DevVoteDelay = TimeSpan.FromSeconds(8);
+        private bool devVoteQueued;
 
         private int tier = -1;
         private readonly HycrestTrack[] tracks = new HycrestTrack[HycrestMissions.TierCount];
@@ -249,6 +257,13 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 return;
             }
 
+            if (DevStartAtVote)
+            {
+                skySpell = NightSkySpell;
+                log.LogWarning("Hycrest: DEV START at the first vote (TheHycrestInsurrectionEventScript.DevStartAtVote), no intro.");
+                return;
+            }
+
             // the intro is a separate root event, players are joined to it by the map script
             publicEvent.Map.PublicEventManager.CreateEvent(HycrestPublicEvent.Intro);
         }
@@ -350,14 +365,23 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                     }
 
                     // TEMPORARY dev shortcut: once per player, to the start of the mission
-                    if (DevStartMission != 0u && devTeleported.Add(player.CharacterId))
+                    bool devVote = DevStartMission == 0u && DevStartAtVote;
+                    if ((DevStartMission != 0u || devVote) && devTeleported.Add(player.CharacterId))
                     {
                         uint devGuid = player.Guid;
+                        Vector3 devSpot = devVote ? DevVoteSpot : DevStartSpot;
                         sceneQueue.Enqueue(DevTeleportDelay, () =>
                         {
                             if (mapInstance.GetEntity<IPlayer>(devGuid) is IPlayer joined && joined.CanTeleport())
-                                joined.TeleportToLocal(DevStartSpot, false);
+                                joined.TeleportToLocal(devSpot, false);
                         });
+                    }
+
+                    // TEMPORARY dev shortcut: the first vote, once, a little after the first player is in the barn
+                    if (devVote && !devVoteQueued)
+                    {
+                        devVoteQueued = true;
+                        sceneQueue.Enqueue(DevTeleportDelay + DevVoteDelay, () => StartVote(HycrestMissions.GetVote(0, HycrestTrack.Tactical)));
                     }
 
                     if (skySpell.HasValue)
