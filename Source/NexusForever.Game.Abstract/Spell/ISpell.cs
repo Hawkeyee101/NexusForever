@@ -1,3 +1,4 @@
+using System.Numerics;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell.Target;
 using NexusForever.Game.Static.Spell;
@@ -15,6 +16,11 @@ namespace NexusForever.Game.Abstract.Spell
         IUnitEntity Caster { get; }
         uint CastingId { get; }
         uint Spell4Id { get; }
+
+        /// <summary>
+        /// Position a ground targeted spell lands at, resolved when the cast starts.
+        /// </summary>
+        Vector3? TargetPosition { get; }
 
         bool IsCasting { get; }
         bool IsFinished { get; }

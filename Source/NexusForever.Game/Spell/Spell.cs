@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Entity.Creature;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Abstract.Spell.Event;
 using NexusForever.Game.Abstract.Spell.Target;
@@ -38,6 +39,7 @@ namespace NexusForever.Game.Spell
         public IUnitEntity Caster { get; private set; }
         public uint CastingId { get; private set; }
         public uint Spell4Id => Parameters.SpellInfo.Entry.Id;
+        public Vector3? TargetPosition { get; private set; }
 
         public bool IsCasting => _IsCasting();
         public bool IsFinished => status == SpellStatus.Finished || status == SpellStatus.Failed;
@@ -237,7 +239,17 @@ namespace NexusForever.Game.Spell
             // It's assumed that non-player entities will be stood still to cast (most do). 
             // TODO: There are a handful of telegraphs that are attached to moving units (specifically rotating units) which this needs to be updated to account for.
             if (Caster is not IPlayer)
+            {
+                // a positional unit belongs to one cast, scripts can cast again with the same parameters
+                Parameters.PositionalUnitId = 0;
+                InitialiseTargetPosition();
+
+                // auras summon their positional unit themselves, they only start casting once it is on the map
+                if (CastMethod != CastMethod.Aura)
+                    SummonPositionalUnit();
+
                 InitialiseTelegraphs();
+            }
 
             // TODO: Fire Script's OnCast
 
@@ -384,15 +396,80 @@ namespace NexusForever.Game.Spell
         }
 
         /// <summary>
+        /// Returns whether this <see cref="ISpell"/> lands at a position rather than around its caster.
+        /// </summary>
+        /// <remarks>
+        /// Target types 3, 4, 7 and 8 all belong to spells that land on the ground at their target (e.g. Napalm Grenade 66273
+        /// is 3, Mortar Barrage's proxies 69305 and 69344 are 4 and 8), the differences between them are unknown.
+        /// </remarks>
+        private bool IsGroundTargeted()
+        {
+            return (uint)Parameters.SpellInfo.BaseInfo.TargetMechanics.TargetType is 3u or 4u or 7u or 8u;
+        }
+
+        /// <summary>
+        /// Resolve the position a ground targeted spell lands at: the supplied target position, the parent spell's for a proxy,
+        /// otherwise where the primary target stands as the cast starts.
+        /// </summary>
+        private void InitialiseTargetPosition()
+        {
+            if (!IsGroundTargeted())
+                return;
+
+            if (Parameters.TargetPosition != null)
+            {
+                TargetPosition = Parameters.TargetPosition.Vector;
+                return;
+            }
+
+            IUnitEntity target = GetExplicitTarget();
+            if (target != null && target != Caster)
+                TargetPosition = target.Position;
+        }
+
+        /// <summary>
+        /// Summon the positional unit (Spell4Base creature2IdPositionalAoe) that anchors the spell at its position.
+        /// </summary>
+        private void SummonPositionalUnit()
+        {
+            uint creatureId = Parameters.SpellInfo.BaseInfo.Entry.Creature2IdPositionalAoe;
+            if (creatureId == 0u)
+                return;
+
+            ICreatureInfo creatureInfo = LegacyServiceProvider.Provider.GetService<ICreatureInfoManager>().GetCreatureInfo(creatureId);
+            if (creatureInfo == null)
+                return;
+
+            Caster.SummonFactory.Summon(creatureInfo, GetSpellPosition(), Caster.Rotation, (map, guid, position) =>
+            {
+                Parameters.PositionalUnitId = guid;
+            });
+        }
+
+        /// <summary>
+        /// Return the position this <see cref="ISpell"/> is centred on: its positional unit, where a ground targeted spell
+        /// lands or its caster.
+        /// </summary>
+        protected Vector3 GetSpellPosition()
+        {
+            if (Parameters.PositionalUnitId > 0)
+            {
+                IWorldEntity positionalUnit = Caster.GetVisible<IWorldEntity>(Parameters.PositionalUnitId);
+                if (positionalUnit != null)
+                    return positionalUnit.Position;
+            }
+
+            return TargetPosition ?? Caster.Position;
+        }
+
+        /// <summary>
         /// Initialises a <see cref="ITelegraph"/> per <see cref="TelegraphDamageEntry"/> as associated with this <see cref="ISpell"/>.
         /// </summary>
         private void InitialiseTelegraphs()
         {
             telegraphs.Clear();
 
-            Vector3 position = Caster.Position;
-            if (Parameters.PositionalUnitId > 0)
-                position = Caster.GetVisible<IWorldEntity>(Parameters.PositionalUnitId)?.Position ?? Caster.Position;
+            Vector3 position = GetSpellPosition();
 
             Vector3 rotation = Caster.Rotation;
             if (Parameters.PositionalUnitId > 0)
@@ -400,7 +477,7 @@ namespace NexusForever.Game.Spell
 
             foreach (TelegraphDamageEntry telegraphDamageEntry in Parameters.SpellInfo.Telegraphs)
                 if (IsTelegraphValid(telegraphDamageEntry))
-                    telegraphs.Add(new Telegraph(telegraphDamageEntry, Caster, Caster.Position, Caster.Rotation));
+                    telegraphs.Add(new Telegraph(telegraphDamageEntry, Caster, position, rotation));
         }
 
         protected virtual bool IsTelegraphValid(TelegraphDamageEntry telegraph)
@@ -545,7 +622,7 @@ namespace NexusForever.Game.Spell
 
             // Targeting First Pass: Do Basic Checks to get targets for spell as needed, nearby.
             var targetSelector = LegacyServiceProvider.Provider.GetService<ISpellTargetImplicitSelector>();
-            targetSelector.Initialise(Caster, Parameters);
+            targetSelector.Initialise(Caster, Parameters, GetSpellPosition());
             targetSelector.SelectTargets(implicitTargets);
 
             InitialiseTelegraphs();
@@ -705,7 +782,7 @@ namespace NexusForever.Game.Spell
                 Spell4Id               = Parameters.SpellInfo.Entry.Id,
                 RootSpell4Id           = Parameters.RootSpellInfo?.Entry.Id ?? 0,
                 ParentSpell4Id         = Parameters.ParentSpellInfo?.Entry.Id ?? 0,
-                FieldPosition          = new Position(Caster.Position),
+                FieldPosition          = new Position(GetSpellPosition()),
                 Yaw                    = Caster.Rotation.X,
                 UserInitiatedSpellCast = Parameters.UserInitiatedSpellCast
             };
@@ -771,7 +848,7 @@ namespace NexusForever.Game.Spell
             var serverSpellGo = new ServerSpellGo
             {
                 ServerUniqueId     = CastingId,
-                PrimaryDestination = new Position(Caster.Position),
+                PrimaryDestination = new Position(GetSpellPosition()),
                 Phase              = currentPhase
             };
 

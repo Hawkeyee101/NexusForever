@@ -122,7 +122,7 @@ namespace NexusForever.Game.Spell.Type
                 if (creatureInfo == null)
                     return false;
 
-                Caster.SummonFactory.Summon(creatureInfo, Caster.Position, Caster.Rotation, (IBaseMap map, uint guid, Vector3 vector) =>
+                Caster.SummonFactory.Summon(creatureInfo, GetSpellPosition(), Caster.Rotation, (IBaseMap map, uint guid, Vector3 vector) =>
                 {
                     Parameters.PositionalUnitId = guid;
 

@@ -25,32 +25,22 @@ namespace NexusForever.Game.Spell.Target.Implicit
 
         #endregion
 
-        public void Initialise(IUnitEntity caster, ISpellParameters parameters)
+        public void Initialise(IUnitEntity caster, ISpellParameters parameters, Vector3 position)
         {
             if (this.caster != null)
                 throw new InvalidOperationException();
 
-            this.caster = caster;
-            info = parameters.SpellInfo;
-
-            initialPosition = caster.Position;
-            if (parameters.PositionalUnitId > 0)
-            {
-                IWorldEntity positionalUnit = caster.GetVisible<IWorldEntity>(parameters.PositionalUnitId);
-                if (positionalUnit == null)
-                    throw new InvalidOperationException();
-
-                initialPosition = positionalUnit.Position;
-            }
+            this.caster     = caster;
+            info            = parameters.SpellInfo;
+            initialPosition = position;
 
             searchCheck.Initialise(caster, initialPosition, info.Entry.TargetMaxRange, info.BaseInfo.TargetMechanics.Flags);
         }
 
         public void SelectTargets(List<ISpellTargetImplicit> implicitTargets)
         {
-            // TODO: Use Target Type to calculate positions
             foreach (IUnitEntity target in caster.Map.Search(initialPosition, info.Entry.TargetMaxRange, searchCheck))
-                implicitTargets.Add(new SpellTargetImplicit(target, Vector3.Distance(caster.Position, target.Position)));
+                implicitTargets.Add(new SpellTargetImplicit(target, Vector3.Distance(initialPosition, target.Position)));
         }
     }
 }

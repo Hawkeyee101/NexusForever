@@ -5,6 +5,7 @@ using NexusForever.Game.Abstract.Spell.Event;
 using NexusForever.Game.Prerequisite;
 using NexusForever.Game.Spell.Event;
 using NexusForever.Game.Static.Spell;
+using NexusForever.Network.World.Entity;
 
 namespace NexusForever.Game.Spell
 {
@@ -36,6 +37,9 @@ namespace NexusForever.Game.Spell
                 RootSpellInfo = parentParameters.RootSpellInfo,
                 PrimaryTargetId = Target.Guid,
                 UserInitiatedSpellCast = parentParameters.UserInitiatedSpellCast,
+                // a ground targeted parent passes on where it lands (e.g. Mortar Barrage's 69305 to its damage 69344), not its
+                // positional unit, which goes when the parent finishes
+                TargetPosition = ParentSpell.TargetPosition.HasValue ? new Position(ParentSpell.TargetPosition.Value) : parentParameters.TargetPosition,
                 IsProxy = true
             };
         }
