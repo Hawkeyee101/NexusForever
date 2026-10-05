@@ -64,7 +64,8 @@ namespace NexusForever.Script.Main.AI
             if (!entity.TargetGuid.HasValue)
                 return;
 
-            if (entity.IsCasting())
+            // busy after a special (NpcExecutionDelay): no chase, no other cast
+            if (entity.IsCasting() || entity.IsBusy)
                 return;
 
             UpdateAI(lastTick);

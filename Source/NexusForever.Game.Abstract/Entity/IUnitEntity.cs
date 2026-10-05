@@ -49,6 +49,19 @@ namespace NexusForever.Game.Abstract.Entity
         bool IsCasting();
 
         /// <summary>
+        /// Return whether this <see cref="IUnitEntity"/> is busy after executing a spell (NpcExecutionDelay, SetBusy).
+        /// </summary>
+        /// <remarks>
+        /// A busy creature doesn't move after its target or start another cast.
+        /// </remarks>
+        bool IsBusy { get; }
+
+        /// <summary>
+        /// Keep this <see cref="IUnitEntity"/> busy for <paramref name="duration"/>, unless it is already busy for longer.
+        /// </summary>
+        void SetBusy(TimeSpan duration);
+
+        /// <summary>
         /// Return <see cref="ISpell"/> with the supplied casting id.
         /// </summary>
         ISpell GetSpell(uint castingId);

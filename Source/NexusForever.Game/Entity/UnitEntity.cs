@@ -281,6 +281,23 @@ namespace NexusForever.Game.Entity
             return false;
         }
 
+        private DateTime busyUntil = DateTime.MinValue;
+
+        /// <summary>
+        /// Return whether this <see cref="IUnitEntity"/> is busy after executing a spell (NpcExecutionDelay, SetBusy).
+        /// </summary>
+        public bool IsBusy => DateTime.UtcNow < busyUntil;
+
+        /// <summary>
+        /// Keep this <see cref="IUnitEntity"/> busy for <paramref name="duration"/>, unless it is already busy for longer.
+        /// </summary>
+        public void SetBusy(TimeSpan duration)
+        {
+            DateTime until = DateTime.UtcNow + duration;
+            if (until > busyUntil)
+                busyUntil = until;
+        }
+
         /// <summary>
         /// Return <see cref="ISpell"/> with the supplied casting id.
         /// </summary>
