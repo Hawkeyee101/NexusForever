@@ -309,6 +309,6 @@ namespace NexusForever.Game.Abstract.Entity.Movement
         /// <summary>
         /// Launch a new chase spline, chasing the supplied <see cref="IWorldEntity"/> at distance.
         /// </summary>
-        void Chase(IWorldEntity entity, float distance);
+        void Chase(IWorldEntity entity, float distance, float angleOffset = 0f);
     }
 }

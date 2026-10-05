@@ -409,9 +409,20 @@ namespace NexusForever.Game.Entity
                     || invisibleEntities.ContainsKey(guid))
                     continue;
                 
-                AddVisionEntity(entity);
-                if (entity != this)
+                // the player of the pair sees the other first (gets its create packet): seeing a player can start a fight
+                // at once (CombatAI's range check), and the target and aggro packets sent then reached the player before
+                // the create, some wave units stayed invisible (Teun, 5 Oct 2026)
+                if (entity == this || this is IPlayer)
+                {
+                    AddVisionEntity(entity);
+                    if (entity != this)
+                        entity.AddVisionEntity(this);
+                }
+                else
+                {
                     entity.AddVisionEntity(this);
+                    AddVisionEntity(entity);
+                }
             }
 
             // old entities now out of vision range

@@ -1,4 +1,5 @@
-﻿using NexusForever.Game.Abstract.Combat;
+﻿using System.Numerics;
+using NexusForever.Game.Abstract.Combat;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Creature;
 using NexusForever.Game.Abstract.Entity.Movement.Command;
@@ -28,7 +29,24 @@ namespace NexusForever.Script.Main.AI
         protected List<uint> autoAttacks = [5649, 5652];
         private readonly UpdateTimer autoAttackTimer = new(TimeSpan.FromSeconds(1.5d));
 
-        private float chaseDistance = 5f;
+        // a ranged creature stops this far into its auto attack range, a melee one this far from its target's edge
+        private const float MeleeRange = 5f;
+        private const float RangedStopFactor = 0.8f;
+        private const float MeleeGap = 1f;
+
+        // chasers of one target spread over this many approach angles, about ApproachSpacing metres apart where they stop
+        // (15-40 degrees), so they stand close but not on top of each other (Teun, 5 Oct 2026; guesses)
+        private const int ApproachAngles = 7;
+        private const float ApproachSpacing = 2.5f;
+        private const float ApproachAngleMin = MathF.PI / 12f;
+        private const float ApproachAngleMax = MathF.PI * 2f / 9f;
+
+        // the closest range a ready special needs that the target is out of (e.g. Flametorch's 6 m for a rifleman who
+        // keeps his distance), so the creature moves in for it
+        private float specialRange = float.MaxValue;
+
+        // the unit this creature turns to face outside of its casts
+        private uint facingGuid;
         private readonly UpdateTimer chaseDistanceTimer = new(TimeSpan.FromSeconds(1f));
 
         /// <summary>
@@ -104,6 +122,13 @@ namespace NexusForever.Script.Main.AI
 
         protected virtual void UpdateAI(double lastTick)
         {
+            // keep facing the target between casts (a special locks the direction while it is cast)
+            if (!entity.IsTurret && entity.TargetGuid.HasValue && facingGuid != entity.TargetGuid.Value)
+            {
+                facingGuid = entity.TargetGuid.Value;
+                entity.MovementManager.SetRotationFaceUnit(facingGuid);
+            }
+
             if (TryCastCreatureSpell())
                 return;
 
@@ -142,9 +167,7 @@ namespace NexusForever.Script.Main.AI
             if (spell4Entry == null)
                 return;
 
-            chaseDistance = Math.Min(chaseDistance, spell4Entry.TargetMaxRange);
-
-            if (entity.Position.GetDistance(target.Position) > spell4Entry.TargetMaxRange)
+            if (entity.Position.GetDistance(target.Position) > spell4Entry.TargetMaxRange + Reach(target))
                 return;
 
             ISpellParameters spellParameters = spellParametersFactory.Resolve();
@@ -190,6 +213,7 @@ namespace NexusForever.Script.Main.AI
             if (victim == null)
                 return false;
 
+            specialRange = float.MaxValue;
             foreach (CreatureSpellState state in creatureSpells)
             {
                 if (state.ReadyIn > 0d)
@@ -214,6 +238,8 @@ namespace NexusForever.Script.Main.AI
                 if (target != entity)
                 {
                     float distance = entity.Position.GetDistance(target.Position);
+                    if (maxRange > 0f && distance > maxRange && target == victim)
+                        specialRange = MathF.Min(specialRange, maxRange);
                     if (distance < minRange || (maxRange > 0f && distance > maxRange))
                         continue;
                 }
@@ -237,10 +263,14 @@ namespace NexusForever.Script.Main.AI
                 if (state.Spell.Target == CreatureSpellTarget.VictimPosition)
                     spellParameters.TargetPosition = new Position(target.Position);
 
+                // the direction is locked at the start of the cast, so its telegraph hits where it was drawn and can be
+                // dodged (facing the unit kept turning the hit area after the target, 5 Oct 2026)
                 if (!entity.IsTurret && target != entity)
                 {
                     entity.MovementManager.Finalise();
-                    entity.MovementManager.SetRotationFaceUnit(target.Guid);
+                    Vector3 toTarget = target.Position - entity.Position;
+                    entity.MovementManager.SetRotation(new Vector3(MathF.Atan2(-toTarget.X, -toTarget.Z), 0f, 0f), false);
+                    facingGuid = 0u;
                 }
 
                 entity.CastSpell(state.Spell.Spell4Id, spellParameters);
@@ -288,10 +318,40 @@ namespace NexusForever.Script.Main.AI
             if (target == null)
                 return;
 
-            if (entity.Position.GetDistance(target.Position) < chaseDistance)
+            // stay at range: only move while the target is out of reach of every auto attack
+            float range = MathF.Min(GetAutoAttackRange(), specialRange);
+            if (entity.Position.GetDistance(target.Position) < range + Reach(target))
                 return;
-            
-            entity.MovementManager.Chase(target, chaseDistance / 2);
+
+            // a ranged creature stops well inside its range, a melee one just short of its target's edge, each at its own
+            // angle around the target
+            float stop  = (range > MeleeRange ? range * RangedStopFactor : MeleeGap) + Reach(target);
+            float step  = Math.Clamp(ApproachSpacing / stop, ApproachAngleMin, ApproachAngleMax);
+            float angle = ((int)(entity.Guid % ApproachAngles) - ApproachAngles / 2) * step;
+            entity.MovementManager.Chase(target, stop, angle);
+            facingGuid = 0u;
+        }
+
+        /// <summary>
+        /// Ranges count from the edges of both units, not their centres: a big unit (Arsenax, the bots) can't get within a
+        /// melee range of its target's centre and kept walking during the fight (Teun, 5 Oct 2026).
+        /// </summary>
+        private float Reach(IUnitEntity target)
+        {
+            return entity.HitRadius + target.HitRadius;
+        }
+
+        /// <summary>
+        /// Return the range all of the creature's auto attacks reach.
+        /// </summary>
+        private float GetAutoAttackRange()
+        {
+            float range = autoAttacks
+                .Select(id => gameTableManager.Spell4.GetEntry(id)?.TargetMaxRange ?? 0f)
+                .Where(r => r > 0f)
+                .DefaultIfEmpty(MeleeRange)
+                .Min();
+            return range;
         }
 
         /// <summary>

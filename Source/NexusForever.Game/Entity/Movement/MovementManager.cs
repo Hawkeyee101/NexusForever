@@ -29,6 +29,11 @@ namespace NexusForever.Game.Entity.Movement
 {
     public class MovementManager : IMovementManager
     {
+        private const float ChaseGroundStep      = 4f;
+        // larger offsets took units under rocks and floors that aren't in the terrain data, where they vanished (Teun, 5 Oct
+        // 2026)
+        private const float ChaseGroundMaxOffset = 3f;
+
         /// <summary>
         /// Owner <see cref="IWorldEntity"/> for the <see cref="IMovementManager"/>.
         /// </summary>
@@ -831,21 +836,51 @@ namespace NexusForever.Game.Entity.Movement
         /// <summary>
         /// Launch a new chase spline, chasing the supplied <see cref="IWorldEntity"/> at distance.
         /// </summary>
-        public void Chase(IWorldEntity entity, float distance)
+        public void Chase(IWorldEntity entity, float distance, float angleOffset = 0f)
         {
             if (!ServerControl)
+                return;
+
+            // stop at distance on this side of the target, on the line between the two
+            Vector3 position = positionCommandGroup.GetPosition();
+            Vector3 away     = new(position.X - entity.Position.X, 0f, position.Z - entity.Position.Z);
+            if (away.Length() <= distance)
                 return;
 
             SetState(StateFlags.Move);
             SetMoveDefaults(false);
             SetRotationFaceUnit(entity.Guid);
 
-            Vector3 destination = entity.Position.GetPoint2D(GetRotation().X, distance);
+            // chasers of one target each come in at their own angle (angleOffset, radians), so a group doesn't end up on
+            // one spot (Teun, 5 Oct 2026)
+            Vector3 direction   = Vector3.Normalize(away);
+            float cos           = MathF.Cos(angleOffset);
+            float sin           = MathF.Sin(angleOffset);
+            direction           = new Vector3(direction.X * cos - direction.Z * sin, 0f, direction.X * sin + direction.Z * cos);
+            Vector3 destination = entity.Position + direction * distance;
+
             // due to most content maps not having terrain data, movement generators will fail
             // TODO: replace this once movement maps are implemented
-            List<Vector3> nodes = [positionCommandGroup.GetPosition(), destination];
+            // until then a long chase follows the terrain where the map has it, instead of one straight line through the
+            // air (props and buildings aren't in the terrain data)
+            List<Vector3> nodes = [position];
+            float length = Vector3.Distance(position, destination);
+            int steps    = (int)(length / ChaseGroundStep);
+            for (int i = 1; i < steps; i++)
+            {
+                Vector3 node   = Vector3.Lerp(position, destination, (float)i / steps);
+                float? height  = Owner.Map?.GetTerrainHeight(node.X, node.Z);
+                // far from the straight line the target is on a floor above the terrain (a prop), keep the line there
+                if (height.HasValue && MathF.Abs(height.Value - node.Y) <= ChaseGroundMaxOffset)
+                    node.Y = height.Value;
+                nodes.Add(node);
+            }
+            nodes.Add(destination);
 
-            float speed = Owner.GetPropertyValue(Property.MoveSpeedMultiplier) * 8f;
+            // a scaled model runs faster on its longer legs: without the scale a big unit (Arsenax) fast-walked after its
+            // target instead of running (Teun, 5 Oct 2026)
+            float scale = Owner.CreatureInfo?.Entry.ModelScale ?? 1f;
+            float speed = Owner.GetPropertyValue(Property.MoveSpeedMultiplier) * 8f * (scale > 0f ? scale : 1f);
             LaunchSpline(nodes, SplineType.Linear, SplineMode.OneShot, speed);
         }
     }
