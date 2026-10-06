@@ -46,6 +46,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private const uint VesnaFlare = 461028u;     // "Stop the Dominion from calling in reinforcements..."
         private const uint VesnaTeam = 461029u;      // "...if you hide in the shadows, they will eventually retreat."
         private const uint VesnaFlareDurationMs = 10000u;
+
+        // TEST (client RE, 6 Oct 2026): a regular communicator plays its voice (CommunicatorLib.PlaySpamVO), a story
+        // communicator never does. The client shows a regular one only once, so each player gets the real communicator
+        // (5022 / 5023, it shows its own text) the first time and the story communicator after that. false = story only.
+        private const bool RealCommunicators = true;
+        private static readonly Dictionary<uint, ushort> CommunicatorByText = new()
+        {
+            { VesnaFlare, 5022 },
+            { VesnaTeam,  5023 }
+        };
+        private static readonly HashSet<(ulong CharacterId, ushort CommunicatorId)> communicatorsShown = [];
         private const uint VesnaTeamDurationMs = 16000u;
         private static readonly TimeSpan VesnaTeamDelay = TimeSpan.FromSeconds(3);
 
@@ -459,7 +470,20 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private void SendCommunicator(uint textId, uint durationMs)
         {
             foreach (IPlayer player in mapInstance.GetPlayers())
+            {
+                if (RealCommunicators
+                    && CommunicatorByText.TryGetValue(textId, out ushort communicatorId)
+                    && communicatorsShown.Add((player.CharacterId, communicatorId)))
+                {
+                    player.Session.EnqueueMessageEncrypted(new ServerCommunicatorMessage
+                    {
+                        CommunicatorId = communicatorId
+                    });
+                    continue;
+                }
+
                 storyBuilder.SendStoryCommunicator(textId, VesnaTaranoft, player, durationMs);
+            }
         }
     }
 }
