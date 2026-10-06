@@ -16,6 +16,9 @@ namespace NexusForever.Game.Spell
         // vertical limit; without one, a cone on the ground hit units on a roof 12 m up)
         private const float VerticalReach = 5f;
 
+        // TelegraphDamageFlags: sizes aren't padded by the target's hit radius
+        private const uint NoTargetRadiusPadding = 0x200u;
+
         public IUnitEntity Caster { get; }
         public Vector3 Position { get; private set; }
         public Vector3 Rotation { get; private set; }
@@ -83,7 +86,10 @@ namespace NexusForever.Game.Spell
         /// </remarks>
         public bool InsideTelegraph(Vector3 position, float hitRadius)
         {
-            hitRadius *= 0.5f;
+            // the client pads every size by the target's full hit radius, none with telegraph damage flag 0x200
+            // (FUN_14054da10; the half radius used before made hits tighter than what is drawn)
+            if ((TelegraphDamage.TelegraphDamageFlags & NoTargetRadiusPadding) != 0u)
+                hitRadius = 0f;
 
             var shape = (DamageShape)TelegraphDamage.DamageShapeEnum;
 
@@ -233,10 +239,7 @@ namespace NexusForever.Game.Spell
             float angleDegrees = MathF.Abs(angleRadian.NormaliseRotationRadians().ToDegrees());
             if (angleDegrees > angle / 2f || angleDegrees < -angle / 2f)
             {
-                // Checks for edge radius is skipped if the caster is not a Player. This optimises this method, but also allows for player's to dodge attacks appropriately.
-                if (Caster is not IPlayer)
-                    return false;
-
+                // the client widens a cone's edges by the target's radius for every caster (FUN_14054d170)
                 if (angleDegrees > angle || angleDegrees < -angle)
                     return false;
 
