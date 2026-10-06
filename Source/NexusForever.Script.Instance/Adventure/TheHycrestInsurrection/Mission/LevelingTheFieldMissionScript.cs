@@ -8,6 +8,7 @@ using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.PublicEvent;
 using NexusForever.GameTable;
+using NexusForever.Network.World.Message.Model.PublicEvent;
 using NexusForever.Script.Template.Filter;
 using NexusForever.Shared;
 
@@ -114,6 +115,15 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private bool hideoutPrepared;
         private bool ending;
 
+        // TEST (client RE, 6 Oct 2026): one crate per supply cluster carries the objective marker. The client marks a unit
+        // that lists an objective with flag 0x200000 (191 has it) in its per-unit list, which ServerPublicEventUnitAdd fills
+        // (inferred). Re-sent every few seconds: a unit the client hasn't created yet (out of range) can't take it, and late
+        // joiners get it too. A taken crate is removed from the map, its marker with it. false = no crate markers.
+        private const bool CrateMarkers = true;
+        private static readonly TimeSpan CrateMarkerResend = TimeSpan.FromSeconds(5);
+        private readonly Dictionary<int, IWorldEntity> markedCrates = [];
+        private double crateMarkerTimer;
+
         private readonly TimedActionQueue actionQueue = new();
         private HycrestAlarm alarm;
 
@@ -208,11 +218,53 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                 siloGossip[i] -= lastTick;
 
             UpdateCarriers();
+            UpdateCrateMarkers(lastTick);
             UpdateSpecialist();
             alarm.Update(lastTick);
         }
 
         // --- crates -----------------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Keep one crate per supply cluster marked for objective 191 (the one closest to its supply spot), and send the
+        /// markers again every few seconds.
+        /// </summary>
+        private void UpdateCrateMarkers(double lastTick)
+        {
+            if (!CrateMarkers || ending)
+                return;
+
+            crateMarkerTimer -= lastTick;
+            if (crateMarkerTimer > 0d)
+                return;
+            crateMarkerTimer = CrateMarkerResend.TotalSeconds;
+
+            for (int cluster = 0; cluster < SupplyLocations.Length; cluster++)
+            {
+                if (markedCrates.TryGetValue(cluster, out IWorldEntity marked) && marked.InWorld && crates.ContainsKey(marked))
+                    continue;
+
+                Vector3 centre = CrateSpots.Where((_, i) => CrateCluster[i] == cluster).Aggregate(Vector3.Zero, (a, b) => a + b)
+                    / CrateCluster.Count(c => c == cluster);
+                IWorldEntity next = crates
+                    .Where(c => CrateCluster[c.Value] == cluster && c.Key.InWorld && c.Key.Guid != 0u)
+                    .Select(c => c.Key)
+                    .OrderBy(c => Vector3.Distance(c.Position, centre))
+                    .FirstOrDefault();
+                if (next != null)
+                    markedCrates[cluster] = next;
+                else
+                    markedCrates.Remove(cluster);
+            }
+
+            foreach (IWorldEntity crate in markedCrates.Values.Where(c => c.InWorld && c.Guid != 0u))
+                foreach (IPlayer player in mapInstance.GetPlayers())
+                    player.Session.EnqueueMessageEncrypted(new ServerPublicEventUnitAdd
+                    {
+                        UnitId     = crate.Guid,
+                        Operations = [new ServerPublicEventUnitAdd.PublicEventOperation { ObjectId = StealShieldParts, Operation = PublicEventOperationType.AddToObjective }]
+                    });
+        }
 
         private void SpawnCrate(int spot)
         {
@@ -254,6 +306,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             crate.InteractionBlocked = true;
             crates.Remove(crate);
+            markedCrates.Remove(CrateCluster[spot]);
+            crateMarkerTimer = 0d;
             HycrestDropShip.SetState(crate, CrateOpen);
             actionQueue.Enqueue(CrateRemoveDelay, () =>
             {
@@ -416,6 +470,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         {
             base.OnHideoutClosed();
             crates.Clear();
+            markedCrates.Clear();
             farmers.Clear();
             specialist = null;
         }
