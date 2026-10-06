@@ -73,6 +73,12 @@ namespace NexusForever.Game.Abstract.PublicEvent
         void OnCreatureSpell(IUnitEntity caster, IUnitEntity target, uint spell4Id);
 
         /// <summary>
+        /// Invoked when a spell's RavelSignal effect (a server side script trigger) applies on the owner <see cref="IBaseMap"/>:
+        /// <paramref name="signal"/> is the signal id, <paramref name="kind"/> its kind.
+        /// </summary>
+        void OnRavelSignal(IUnitEntity caster, IUnitEntity target, uint spell4Id, uint kind, uint signal);
+
+        /// <summary>
         /// Update any objective for any public event <see cref="IPlayer"/> is part of that meets the supplied <see cref="PublicEventObjectiveType"/>, objectId and count.
         /// </summary>
         void UpdateObjective(IPlayer player, PublicEventObjectiveType type, uint objectId, int count);

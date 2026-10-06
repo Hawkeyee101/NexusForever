@@ -85,6 +85,14 @@ namespace NexusForever.Script.Template
         }
 
         /// <summary>
+        /// Invoked when a spell's RavelSignal effect (a server side script trigger) applies on the map: <paramref name="signal"/>
+        /// is the signal id (Spell4Effects dataBits01), <paramref name="kind"/> its kind (dataBits00).
+        /// </summary>
+        void OnRavelSignal(IUnitEntity caster, IUnitEntity target, uint spell4Id, uint kind, uint signal)
+        {
+        }
+
+        /// <summary>
         /// Invoked when a vote on the public event has finished.
         /// </summary>
         void OnVoteFinished(uint voteId, uint winner)
