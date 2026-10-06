@@ -118,10 +118,9 @@ namespace NexusForever.Game.Spell
                 case DamageShape.LongCone:
                 {
                     // TODO: LongCone can have extra side and end extents in Param03-05, the outer radius is used for now
-                    // Param00 is the cone's start distance minus the target's radius (Gleade's CSV); melee casters stand closer
-                    // than most starts (Slashing Strikes 4.5 m, Triple Threat 3 m), so hits count from the caster for now
-                    // (local stand-in, 5 Oct 2026)
-                    float telegraphStart          = 0f;
+                    // Param00 is a real hole: the client draws the cone from Param00 minus the target's radius (FUN_14054d170),
+                    // e.g. Slashing Strikes is a band at 4.5 m, Triple Threat 3-5 m; a target closer than that isn't hit
+                    float telegraphStart          = MathF.Max(TelegraphDamage.Param00, 0f);
                     float telegraphRadius         = TelegraphDamage.Param01;
                     float telegraphAngleInDegrees = MathF.Min(TelegraphDamage.Param02, 360f);
 

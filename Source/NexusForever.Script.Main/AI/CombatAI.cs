@@ -71,6 +71,11 @@ namespace NexusForever.Script.Main.AI
         {
             public ICreatureSpell Spell;
             public double ReadyIn;
+
+            // the distances from the caster its telegraphs cover (empty: not checked, e.g. ground targeted); with a cone
+            // that starts away from the caster, the middle of that cone's band
+            public List<(float From, float To)> Covered = [];
+            public float ConeBandMiddle;
         }
 
         private readonly List<CreatureSpellState> creatureSpells = [];
@@ -112,7 +117,60 @@ namespace NexusForever.Script.Main.AI
                 autoAttacks = listAutoAttacks;
 
             foreach (ICreatureSpell spell in spells.Where(s => (s.Flags & CreatureSpellFlags.AutoAttack) == 0))
-                creatureSpells.Add(new CreatureSpellState { Spell = spell });
+            {
+                var state = new CreatureSpellState { Spell = spell };
+                InitialiseCoverage(state);
+                creatureSpells.Add(state);
+            }
+        }
+
+        /// <summary>
+        /// The distances a special's telegraphs cover in front of the caster. A cone's start is a hole the client doesn't
+        /// hit (FUN_14054d170): Slashing Strikes is a 1 m circle and cones at 4.5 m, so a target between them isn't hit.
+        /// </summary>
+        private void InitialiseCoverage(CreatureSpellState state)
+        {
+            if (state.Spell.Target == CreatureSpellTarget.VictimPosition)
+                return;
+
+            foreach (Spell4TelegraphEntry link in gameTableManager.Spell4Telegraph.Entries.Where(e => e.Spell4Id == state.Spell.Spell4Id))
+            {
+                TelegraphDamageEntry telegraph = gameTableManager.TelegraphDamage.GetEntry(link.TelegraphDamageId);
+                if (telegraph == null)
+                    continue;
+
+                float offset = MathF.Abs(telegraph.XPositionOffset) + MathF.Abs(telegraph.ZPositionOffset);
+                switch ((DamageShape)telegraph.DamageShapeEnum)
+                {
+                    case DamageShape.Cone:
+                    case DamageShape.LongCone:
+                    case DamageShape.Ring:
+                    case DamageShape.Pie:
+                        state.Covered.Add((MathF.Max(telegraph.Param00 - offset, 0f), telegraph.Param01 + offset));
+                        if (telegraph.Param00 > 0f && (DamageShape)telegraph.DamageShapeEnum is DamageShape.Cone or DamageShape.LongCone)
+                            state.ConeBandMiddle = MathF.Max(state.ConeBandMiddle, (telegraph.Param00 + telegraph.Param01) / 2f);
+                        break;
+                    case DamageShape.Circle:
+                        state.Covered.Add((0f, telegraph.Param00 + offset));
+                        break;
+                    case DamageShape.Rectangle:
+                        state.Covered.Add((0f, telegraph.Param02 + offset));
+                        break;
+                    default:
+                        state.Covered.Add((0f, MathF.Max(telegraph.Param00, MathF.Max(telegraph.Param01, telegraph.Param02)) + offset));
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Return whether a target this far away (centre to centre) with this hit radius is inside a distance the special's
+        /// telegraphs cover.
+        /// </summary>
+        private static bool IsCovered(CreatureSpellState state, float distance, float hitRadius)
+        {
+            return state.Covered.Count == 0
+                || state.Covered.Any(c => distance + hitRadius >= c.From && distance - hitRadius <= c.To);
         }
 
         /// <summary>
@@ -300,6 +358,10 @@ namespace NexusForever.Script.Main.AI
                         specialRange = MathF.Min(specialRange, maxRange);
                     if (distance < minRange || (maxRange > 0f && distance > maxRange))
                         continue;
+
+                    // not cast at a target its telegraphs miss (inside a cone's hole)
+                    if (!IsCovered(state, distance, target.HitRadius))
+                        continue;
                 }
 
                 // no interval: once per fight
@@ -398,7 +460,7 @@ namespace NexusForever.Script.Main.AI
 
             // a ranged creature stops well inside its range, a melee one just short of its target's edge, each at its own
             // angle around the target
-            float stop  = (range > MeleeRange ? range * RangedStopFactor : MeleeGap) + Reach(target);
+            float stop  = range > MeleeRange ? range * RangedStopFactor + Reach(target) : GetMeleeStop(target);
             float step  = Math.Clamp(ApproachSpacing / stop, ApproachAngleMin, ApproachAngleMax);
             float angle = ((int)(entity.Guid % ApproachAngles) - ApproachAngles / 2) * step;
             entity.MovementManager.Chase(target, stop, angle);
@@ -413,6 +475,19 @@ namespace NexusForever.Script.Main.AI
         private float Reach(IUnitEntity target)
         {
             return entity.HitRadius + target.HitRadius;
+        }
+
+        /// <summary>
+        /// A melee creature stops just short of its target's edge, unless a special's telegraphs don't cover that distance
+        /// (a cone with a hole): then in the middle of that cone's band (Slashing Strikes 4.5 m).
+        /// </summary>
+        private float GetMeleeStop(IUnitEntity target)
+        {
+            float stop = MeleeGap + Reach(target);
+            foreach (CreatureSpellState state in creatureSpells)
+                if (state.ConeBandMiddle > 0f && !IsCovered(state, stop, target.HitRadius))
+                    stop = MathF.Max(stop, state.ConeBandMiddle);
+            return stop;
         }
 
         /// <summary>
