@@ -11,6 +11,7 @@ using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Entity.Movement.Command.Mode;
 using NexusForever.Game.Static.Entity.Movement.Spline;
 using NexusForever.Game.Static.PublicEvent;
+using NexusForever.Game.Static.Reputation;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Message.Model;
@@ -36,7 +37,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
     /// spline 14748 starts inside it and runs through the gap, and the Jabbithole farmer sightings lie on it); three
     /// farmers who wait while guards are near them; the Rocketeers dropping in along splines 15767-15769 when the blimp
     /// arrives; the blimp's deck on top of its balloon (its model, 27-29 m above its origin) and its facing; the jetpack
-    /// flight (a script stand-in for Rocketeering 46658, whose forced move the engine can't do); the knock-off.
+    /// flight lands on an invisible marker at the landing spot (Rocketeering 46658 flies the player onto its target unit,
+    /// client RE 6 Oct 2026); the knock-off.
     /// </remarks>
     [ScriptFilterOwnerId(425u)]
     public class JailbreakMissionScript : HycrestMissionScript, IJailbreakMissionScript
@@ -121,11 +123,17 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const float DropSpeed = 7f;
         private static readonly TimeSpan EngageDelay = TimeSpan.FromSeconds(0.5);
 
-        // the jetpack flight (stand-in for Rocketeering 46658, 3.5 s): a forced move arc up onto the deck; a player who
-        // isn't aboard after it (the client didn't take the keys) is put there
+        // the jetpack flight: the player casts Rocketeering 46658 (ForcedMove type 10, flag 2 "land exactly", 3.5 s, 200 ms
+        // delay) on an invisible marker at the landing spot, and the client flies its own player there in an arc (client
+        // FUN_1405d6c10, research/client-re-telegraph-forcedmove.md); a player who isn't aboard 1 s after the flight is put
+        // there. The marker (InvisibleMan 53908, friendly) is world placed like the rest of the deck: the blimp is parked
+        // while the jetpacks can be used. Without a marker, or when the cast is refused, the old scripted arc is used
+        private const uint Rocketeering = 46658u;
+        private const uint LandingMarker = 53908u;
+        private const Faction FriendlyFaction = (Faction)219;
         private static readonly TimeSpan LaunchFlight = TimeSpan.FromSeconds(3.5);
         private const float LaunchGravity = 10f;
-        private const double LaunchCheck = 4.5d;
+        private const double LaunchCheck = 4.7d;
 
         // the knock-off (failure, and the blimp going down): an arc out and down to the ground beside the blimp
         private static readonly TimeSpan KnockFlight = TimeSpan.FromSeconds(3);
@@ -186,6 +194,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private bool blimpParked;
         private bool blimpDown;
         private IWorldEntity navigationArray;
+        private IWorldEntity landingMarker;
         private readonly Dictionary<int, IWorldEntity> stabilizers = [];
         private readonly Dictionary<uint, double> launches = [];   // player guid -> seconds until the landing check
         private readonly HashSet<uint> aboard = [];
@@ -589,6 +598,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             publicEvent.SetPhase(JetpackPhase);
 
             navigationArray = SpawnUnit(NavigationArray, ToWorld(NavigationArrayLocal), BlimpYaw);
+            landingMarker   = SpawnUnit(LandingMarker, ToWorld(LandingLocal), BlimpYaw, FriendlyFaction);
+            if (landingMarker is IUnitEntity marker)
+                marker.IsInvulnerable = true;
             for (int i = 0; i < StabilizerLocals.Length; i++)
                 SpawnStabilizer(i);
 
@@ -650,14 +662,32 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             if (ending || publicEvent.HasFinished || !blimpParked || blimpDown)
                 return;
 
+            fallers.Remove(player.Guid);
+            launches[player.Guid] = LaunchCheck;
+
+            if (landingMarker is { InWorld: true })
+            {
+                ISpellParameters parameters = spellParametersFactory.Resolve();
+                parameters.PrimaryTargetId        = landingMarker.Guid;
+                parameters.UserInitiatedSpellCast = false;
+                player.CastSpell(Rocketeering, parameters);
+                if (player.GetSpellBySpellId(Rocketeering) != null)
+                {
+                    log.LogInformation($"Hycrest: Jailbreak, {player.Name} rockets up to the blimp (Rocketeering).");
+                    return;
+                }
+
+                // its caster check 10504 (prerequisite type 102, an active spell effect 44148 of Fire Grappling Hook
+                // 26793) isn't handled for players yet, so the cast can be refused
+                log.LogInformation($"Hycrest: Jailbreak, {player.Name} couldn't cast Rocketeering, scripted arc instead.");
+            }
+
+            // no marker or no Rocketeering: the scripted arc
             Vector3 landing = ToWorld(LandingLocal + new Vector3((float)(Random.Shared.NextDouble() * 3d - 1.5d), 0f, 0f));
             Vector3 direction = landing - player.Position;
             float yaw = MathF.Atan2(-direction.X, -direction.Z);
-
-            fallers.Remove(player.Guid);
             forcedMovementGenerator.ForceMove(player, landing, new Vector3(yaw, 0f, 0f), LaunchFlight, LaunchGravity, 0f);
-            launches[player.Guid] = LaunchCheck;
-            log.LogInformation($"Hycrest: Jailbreak, {player.Name} rockets up to the blimp.");
+            log.LogInformation($"Hycrest: Jailbreak, {player.Name} rockets up to the blimp (scripted arc).");
         }
 
         private void UpdateLaunches(double lastTick)
@@ -678,7 +708,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                     continue;
                 }
 
-                // the arc didn't take: put them on the deck
+                // the flight didn't take: put them on the deck
                 log.LogInformation($"Hycrest: Jailbreak, {player.Name} didn't land on the blimp ({player.Position}), moved onto the deck.");
                 aboard.Add(guid);
                 player.TeleportToLocal(ToWorld(LandingLocal), false);
@@ -843,6 +873,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             if (navigationArray?.InWorld == true)
                 navigationArray.RemoveFromMap();
+            if (landingMarker?.InWorld == true)
+                landingMarker.RemoveFromMap();
             foreach (IWorldEntity stabilizer in stabilizers.Values.Where(s => s.InWorld))
                 stabilizer.RemoveFromMap();
             stabilizers.Clear();
@@ -1034,7 +1066,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             return result;
         }
 
-        private IWorldEntity SpawnUnit(uint creatureId, Vector3 position, float yaw)
+        private IWorldEntity SpawnUnit(uint creatureId, Vector3 position, float yaw, Faction? faction = null)
         {
             ICreatureInfo creatureInfo = creatureInfoManager.GetCreatureInfo(creatureId);
             if (creatureInfo == null)
@@ -1045,6 +1077,11 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             var entity = publicEvent.CreateEntity<INonPlayerEntity>();
             entity.Initialise(creatureInfo);
+            if (faction.HasValue)
+            {
+                entity.Faction1 = faction.Value;
+                entity.Faction2 = faction.Value;
+            }
             entity.Rotation = new Vector3(yaw, 0f, 0f);
             entity.AddToMap(mapInstance, position);
             return entity;
@@ -1126,6 +1163,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             barricade       = null;
             blimp           = null;
             navigationArray = null;
+            landingMarker   = null;
             blimpParked     = false;
         }
 
