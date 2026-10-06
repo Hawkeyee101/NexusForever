@@ -96,21 +96,38 @@ namespace NexusForever.Game.Spell.Effect.Handler
                 }
                 case SpellEffectForcedMoveType.Unknown8:  // 60331 - Teleport Target to Caster
                 case SpellEffectForcedMoveType.Unknown9:  // 2039 - Get Over Here
-                case SpellEffectForcedMoveType.Unknown10: // 4206 - Grapple
+                case SpellEffectForcedMoveType.Unknown10: // 4206 - Grapple, 46658 - Rocketeering
                 case SpellEffectForcedMoveType.Unknown15:
                 {
-                    position = mover.Position;
+                    // move to a unit (client FUN_1405d6c10): the other side of the move, the caster when the target is
+                    // moved (Target flag), otherwise the spell's primary target; unless flag 2 ("land exactly") the mover
+                    // stops short by both hit radii plus the distance value (local reading of the client, 6 Oct 2026)
+                    IUnitEntity destination = mover == target && mover != executionContext.Spell.Caster
+                        ? executionContext.Spell.Caster
+                        : GetPrimaryTarget(executionContext.Spell);
+                    if (destination == null || destination == mover)
+                        return SpellEffectExecutionResult.PreventEffect;
+
+                    position = destination.Position;
+                    if ((data.Flags & SpellEffectForcedMoveFlags.Unknown2) == 0)
+                    {
+                        Vector3 back = mover.Position - destination.Position;
+                        back.Y = 0f;
+                        float shortBy = destination.HitRadius + mover.HitRadius + data.MinDistance;
+                        if (back.Length() > shortBy)
+                            position += Vector3.Normalize(back) * shortBy;
+                        else
+                            position = mover.Position;
+                    }
+
+                    Vector3 along = position - mover.Position;
+                    angle = MathF.Atan2(-along.X, -along.Z);
                     break;
                 }
             }
 
             if (position == Vector3.Zero)
                 return SpellEffectExecutionResult.PreventEffect;
-
-            // TODO
-            if ((data.Flags & SpellEffectForcedMoveFlags.Unknown2) != 0)
-            {
-            }
 
             // TODO
             if ((data.Flags & SpellEffectForcedMoveFlags.Unknown4) != 0)
@@ -127,6 +144,13 @@ namespace NexusForever.Game.Spell.Effect.Handler
             float? terrainHeight = mover.Map.GetTerrainHeight(position.X, position.Z);
             if (position.Y < terrainHeight)
                 position.Y = terrainHeight.Value;
+
+            // the client carries out a forced move on its own player itself (FUN_1405d6c10 returns early for any other
+            // mover): moving the player on the server as well fought the client's flight, the server follows its
+            // position updates instead (local reading, 6 Oct 2026)
+            if (mover is IPlayer && data.MoveType is SpellEffectForcedMoveType.Unknown8 or SpellEffectForcedMoveType.Unknown9
+                or SpellEffectForcedMoveType.Unknown10 or SpellEffectForcedMoveType.Unknown15)
+                return SpellEffectExecutionResult.Ok;
 
             switch (data.MoveType)
             {
@@ -159,13 +183,26 @@ namespace NexusForever.Game.Spell.Effect.Handler
                 case SpellEffectForcedMoveType.Unknown12:
                 case SpellEffectForcedMoveType.Unknown13:
                 case SpellEffectForcedMoveType.Unknown14:
+                {
+                    break;
+                }
                 case SpellEffectForcedMoveType.Unknown15:
                 {
+                    float spin = (data.Spin * MathF.PI * 2) / v20;
+                    forcedMovementGenerator.ForceMove(mover, position, new Vector3(angle, 0f, 0f), data.FlightTime, gravity, spin);
                     break;
                 }
             }
 
             return SpellEffectExecutionResult.Ok;
+        }
+
+        private static IUnitEntity GetPrimaryTarget(ISpell spell)
+        {
+            if (spell.Parameters.PrimaryTargetId == 0u)
+                return null;
+
+            return spell.Caster.GetVisible<IGridEntity>(spell.Parameters.PrimaryTargetId) as IUnitEntity;
         }
     }
 }
