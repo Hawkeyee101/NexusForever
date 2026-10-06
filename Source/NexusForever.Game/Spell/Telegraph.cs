@@ -21,13 +21,22 @@ namespace NexusForever.Game.Spell
         public Vector3 Rotation { get; private set; }
         public TelegraphDamageEntry TelegraphDamage { get; }
         public TelegraphTargetTypeFlags TelegraphTargetTypeFlags => (TelegraphTargetTypeFlags)TelegraphDamage.TargetTypeFlags;
+        public uint AttachedUnitId { get; }
 
-        public Telegraph(TelegraphDamageEntry telegraphDamageEntry, IUnitEntity caster, Vector3 position, Vector3 rotation)
+        /// <summary>
+        /// The client draws a telegraph at a position entry whose flags share a bit with the telegraph's target type flags,
+        /// a row without any at the target or field entry (2); higher bits (8) aren't placement bits (client telegraph
+        /// manager FUN_140546e60).
+        /// </summary>
+        public byte PositionFlags => (TelegraphDamage.TargetTypeFlags & 7u) == 0u ? (byte)2 : (byte)(TelegraphDamage.TargetTypeFlags & 7u);
+
+        public Telegraph(TelegraphDamageEntry telegraphDamageEntry, IUnitEntity caster, Vector3 position, Vector3 rotation, uint attachedUnitId = 0u)
         {
             TelegraphDamage = telegraphDamageEntry;
             Caster          = caster;
             Position        = position;
             Rotation        = rotation;
+            AttachedUnitId  = attachedUnitId != 0u ? attachedUnitId : caster.Guid;
 
             ApplyPositionOffsets();
             ApplyRotationOffsets();

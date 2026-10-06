@@ -477,9 +477,69 @@ namespace NexusForever.Game.Spell
             if (Parameters.PositionalUnitId > 0)
                 rotation = Caster.GetVisible<IWorldEntity>(Parameters.PositionalUnitId)?.Rotation ?? Caster.Rotation;
 
+            IUnitEntity target = GetExplicitTarget();
             foreach (TelegraphDamageEntry telegraphDamageEntry in Parameters.SpellInfo.Telegraphs)
-                if (IsTelegraphValid(telegraphDamageEntry))
+            {
+                if (!IsTelegraphValid(telegraphDamageEntry))
+                    continue;
+
+                // placed by its target type flags, as the client draws it (FUN_140546e60): 4 alone on each target (the primary
+                // one, the others aren't known before the cast), 1 alone at the caster, otherwise (2, or none) at the spell's
+                // target or field position
+                uint placement = telegraphDamageEntry.TargetTypeFlags & 7u;
+                if (placement == 4u && target != null && target != Caster)
+                    telegraphs.Add(new Telegraph(telegraphDamageEntry, Caster, target.Position, rotation, target.Guid));
+                else if (placement == 1u)
+                    telegraphs.Add(new Telegraph(telegraphDamageEntry, Caster, Caster.Position, rotation));
+                else
                     telegraphs.Add(new Telegraph(telegraphDamageEntry, Caster, position, rotation));
+            }
+        }
+
+        /// <summary>
+        /// The telegraph position entries of a spell packet, each flagged the way the client matches it against the
+        /// telegraph's target type flags (all were sent as 3, so telegraphs placed only on targets, flag 4, were never drawn).
+        /// </summary>
+        private List<TelegraphPosition> BuildTelegraphPositions()
+        {
+            var positions = new List<TelegraphPosition>();
+            foreach (ITelegraph telegraph in telegraphs)
+            {
+                positions.Add(new TelegraphPosition
+                {
+                    TelegraphId    = (ushort)telegraph.TelegraphDamage.Id,
+                    AttachedUnitId = telegraph.AttachedUnitId,
+                    TargetFlags    = telegraph.PositionFlags,
+                    Position       = new Position(telegraph.Position),
+                    Yaw            = telegraph.Rotation.X
+                });
+            }
+
+            return positions;
+        }
+
+        /// <summary>
+        /// The units the per target telegraphs (flag 4) are drawn on, as position entries with flag 4.
+        /// </summary>
+        private IEnumerable<InitialPosition> BuildTargetPositions()
+        {
+            foreach (uint unitId in telegraphs
+                .Where(t => (t.PositionFlags & 4) != 0 && t.AttachedUnitId != Caster.Guid)
+                .Select(t => t.AttachedUnitId)
+                .Distinct())
+            {
+                IUnitEntity unit = Caster.GetVisible<IUnitEntity>(unitId);
+                if (unit == null)
+                    continue;
+
+                yield return new InitialPosition
+                {
+                    UnitId      = unit.Guid,
+                    Position    = new Position(unit.Position),
+                    TargetFlags = 4,
+                    Yaw         = unit.Rotation.X
+                };
+            }
         }
 
         protected virtual bool IsTelegraphValid(TelegraphDamageEntry telegraph)
@@ -810,23 +870,8 @@ namespace NexusForever.Game.Spell
                 });
             }
 
-            foreach (IUnitEntity unit in unitsCasting)
-            {
-                if (unit == null)
-                    continue;
-
-                foreach (ITelegraph telegraph in telegraphs)
-                {
-                    spellStart.TelegraphPositionData.Add(new TelegraphPosition
-                    {
-                        TelegraphId    = (ushort)telegraph.TelegraphDamage.Id,
-                        AttachedUnitId = unit.Guid,
-                        TargetFlags    = 3,
-                        Position       = new Position(telegraph.Position),
-                        Yaw            = telegraph.Rotation.X
-                    });
-                }
-            }
+            spellStart.InitialPositionData.AddRange(BuildTargetPositions());
+            spellStart.TelegraphPositionData.AddRange(BuildTelegraphPositions());
 
             Caster.EnqueueToVisible(spellStart, true);
         }
@@ -871,20 +916,8 @@ namespace NexusForever.Game.Spell
                     Yaw         = unit.Rotation.X
                 });
 
-            foreach (IUnitEntity unit in unitsCasting)
-            {
-                foreach (ITelegraph telegraph in telegraphs)
-                {
-                    serverSpellGo.TelegraphPositionData.Add(new TelegraphPosition
-                    {
-                        TelegraphId    = (ushort)telegraph.TelegraphDamage.Id,
-                        AttachedUnitId = unit.Guid,
-                        TargetFlags    = 3,
-                        Position       = new Position(telegraph.Position),
-                        Yaw            = telegraph.Rotation.X
-                    });
-                }
-            }
+            serverSpellGo.InitialPositionData.AddRange(BuildTargetPositions());
+            serverSpellGo.TelegraphPositionData.AddRange(BuildTelegraphPositions());
 
             Caster.EnqueueToVisible(serverSpellGo, true);
         }
@@ -918,20 +951,8 @@ namespace NexusForever.Game.Spell
                 });
             }
 
-            foreach (IUnitEntity unit in unitsCasting)
-            {
-                foreach (ITelegraph telegraph in telegraphs)
-                {
-                    spellInit.TelegraphPositionData.Add(new TelegraphPosition
-                    {
-                        TelegraphId    = (ushort)telegraph.TelegraphDamage.Id,
-                        AttachedUnitId = unit.Guid,
-                        TargetFlags    = 3,
-                        Position       = new Position(telegraph.Position),
-                        Yaw            = telegraph.Rotation.X
-                    });
-                }
-            }
+            spellInit.InitialPositionData.AddRange(BuildTargetPositions());
+            spellInit.TelegraphPositionData.AddRange(BuildTelegraphPositions());
 
             return spellInit;
         }

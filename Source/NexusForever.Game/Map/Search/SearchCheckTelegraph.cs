@@ -21,12 +21,8 @@ namespace NexusForever.Game.Map.Search
 
         public bool CheckEntity(IUnitEntity entity)
         {
-            // flag 2 ("Self") isn't "only the caster": every ground targeted telegraph has it (Mortar Barrage 7106/7107,
-            // Energy Leap, Napalm Grenade, Wild Barrage, Exterminate 8554), placed at the target's position, so it doesn't
-            // limit who is hit (local reading, 5 Oct 2026)
-            if (telegraph.TelegraphTargetTypeFlags.HasFlag(TelegraphTargetTypeFlags.Other) && entity == caster)
-                return false;
-
+            // the target type flags only say where the client draws the telegraph (1 caster, 2 target or field position,
+            // 4 each target; client FUN_140546e60), not who it hits: that is the spell's target mechanics
             return telegraph.InsideTelegraph(entity.Position, entity.HitRadius);
         }
     }
