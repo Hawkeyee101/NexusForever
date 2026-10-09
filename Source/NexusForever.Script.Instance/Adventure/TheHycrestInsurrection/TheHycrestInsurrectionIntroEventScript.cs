@@ -392,6 +392,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         {
             storyBuilder.SendStoryCommunicator(textId, (uint)PublicEventCreature.TheCaretaker, player, CaretakerMessageDurationMs);
             PlayHologramTalk();
+            log.LogDebug($"Hycrest: intro, Caretaker narration {textId} to {player.Name}.");
         }
 
         private void PlayHologramTalk()

@@ -30,7 +30,9 @@ namespace NexusForever.Game.Prerequisite.Check
 
         public bool Meets(IUnitEntity subject, PrerequisiteComparison comparison, uint value, uint objectId, IPrerequisiteParameters parameters)
         {
-            uint moving = (subject.MovementManager.GetState() & StateFlags.Move) != 0 ? 1u : 0u;
+            // a player's movement comes from the client (velocity), an NPC's from the server's move state
+            bool isMoving = subject.MovementManager.HasVelocity || (subject.MovementManager.GetState() & StateFlags.Move) != 0;
+            uint moving = isMoving ? 1u : 0u;
             switch (comparison)
             {
                 case PrerequisiteComparison.Equal:

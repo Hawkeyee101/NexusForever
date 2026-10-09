@@ -12,6 +12,11 @@ namespace NexusForever.Game.Abstract.Entity.Movement
     public interface IMovementManager : IUpdate
     {
         /// <summary>
+        /// Whether the owner is moving (has a velocity), e.g. a player moving on the client.
+        /// </summary>
+        bool HasVelocity { get; }
+
+        /// <summary>
         /// Owner <see cref="IWorldEntity"/> for the <see cref="IMovementManager"/>.
         /// </summary>
         public IWorldEntity Owner { get; }

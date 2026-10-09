@@ -247,11 +247,9 @@ namespace NexusForever.Game.Spell
                 // auras summon their positional unit themselves, they only start casting once it is on the map
                 if (CastMethod != CastMethod.Aura)
                     SummonPositionalUnit();
-            }
 
-            // the spell start carries the telegraphs, attached to the caster (the client moves them with a moving player);
-            // without them a player's own casts showed no telegraph (Teun, since the first test)
-            InitialiseTelegraphs();
+                InitialiseTelegraphs();
+            }
 
             // TODO: Fire Script's OnCast
 
@@ -813,7 +811,9 @@ namespace NexusForever.Game.Spell
 
             log.LogDebug($"Spell {Parameters.SpellInfo.Entry.Id} failed to cast {castResult}.");
 
-            if (Caster is IPlayer player && !player.IsLoading)
+            // casts the player didn't start themselves (procs, scripts) fail quietly: a proc that didn't apply put
+            // "Prerequisite not met" on screen (Teun, 7 Oct 2026)
+            if (Caster is IPlayer player && !player.IsLoading && Parameters.UserInitiatedSpellCast)
             {
                 player.Session.EnqueueMessageEncrypted(new ServerSpellCastResult
                 {

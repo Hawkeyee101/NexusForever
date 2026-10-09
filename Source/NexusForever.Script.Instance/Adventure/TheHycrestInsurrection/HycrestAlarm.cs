@@ -58,12 +58,14 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         };
         private static readonly HashSet<(ulong CharacterId, ushort CommunicatorId)> communicatorsShown = [];
         private const uint VesnaTeamDurationMs = 16000u;
-        private static readonly TimeSpan VesnaTeamDelay = TimeSpan.FromSeconds(3);
 
         private static readonly TimeSpan CastDelay = TimeSpan.FromSeconds(1);
         // the specialist runs at the player he engaged and calls once he is this close, or after the time limit
         private const float CallRange = 10f;
         private static readonly TimeSpan MaxApproachTime = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan ApproachBusy = TimeSpan.FromSeconds(0.5);
+        private const double ApproachChaseInterval = 1d;
+        private double approachChaseTimer;
         private static readonly TimeSpan CastTime = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan RecastDelay = TimeSpan.FromSeconds(4);
         private static readonly TimeSpan FlareDuration = TimeSpan.FromSeconds(14);
@@ -188,6 +190,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             callSpell    = null;
             stateTimer   = CastDelay.TotalSeconds;
             approachTime = 0d;
+            approachChaseTimer = 0d;
 
             SendCommunicator(VesnaFlare, VesnaFlareDurationMs);
             log.LogInformation($"Hycrest: alarm, the Recon Specialist at {unit.Position} calls reinforcements.");
@@ -255,7 +258,18 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 if (target is { IsAlive: true }
                     && Vector3.Distance(target.Position, specialist.Position) > CallRange
                     && approachTime < MaxApproachTime.TotalSeconds)
+                {
+                    // he runs in to call, without shooting first: his combat AI would keep him at pistol range and attack
+                    // (Teun, 7 Oct 2026), so it waits (busy) while the alarm runs him in
+                    specialist.SetBusy(ApproachBusy);
+                    approachChaseTimer -= lastTick;
+                    if (approachChaseTimer <= 0d)
+                    {
+                        approachChaseTimer = ApproachChaseInterval;
+                        specialist.MovementManager.Chase(target, CallRange - 2f);
+                    }
                     return;
+                }
 
                 StartCall();
                 return;
@@ -403,8 +417,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
                 }
             });
 
+            // Vesna together with the team, not after it (she came 3 s late, after the drop pod had gone: Teun, 7 Oct 2026)
             Broadcast(TeamTooltip);
-            actionQueue.Enqueue(VesnaTeamDelay, () => SendCommunicator(VesnaTeam, VesnaTeamDurationMs));
+            SendCommunicator(VesnaTeam, VesnaTeamDurationMs);
             log.LogInformation("Hycrest: alarm, Rapid Response Team arrived.");
         }
 

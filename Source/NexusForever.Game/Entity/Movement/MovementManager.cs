@@ -463,15 +463,19 @@ namespace NexusForever.Game.Entity.Movement
             get => hasVelocity;
             set
             {
-                if (hasVelocity != value && Owner is IUnitEntity unit)
+                bool changed = hasVelocity != value;
+
+                // stored before the procs: a BeginMoving proc checks that its target is moving (e.g. the Esper's tier 4
+                // buff removals 77174/77238, prerequisite 11119) and failed every time
+                hasVelocity = value;
+
+                if (changed && Owner is IUnitEntity unit)
                 {
                     if (value == true)
                         unit.ProcManager.TriggerProc(ProcType.BeginMoving);
                     else
                         unit.ProcManager.TriggerProc(ProcType.StopsMoving);
                 }
-
-                hasVelocity = value;
             }
         }
 

@@ -139,6 +139,11 @@ namespace NexusForever.Script.Main.AI
                 if (telegraph == null)
                     continue;
 
+                // only telegraphs drawn at the caster (target type flag 1) limit the distance: one placed at the target or
+                // the spell's position covers the target wherever it is (Snipe's circle on its target never fired)
+                if ((telegraph.TargetTypeFlags & 1u) == 0u)
+                    continue;
+
                 float offset = MathF.Abs(telegraph.XPositionOffset) + MathF.Abs(telegraph.ZPositionOffset);
                 switch ((DamageShape)telegraph.DamageShapeEnum)
                 {
@@ -548,6 +553,17 @@ namespace NexusForever.Script.Main.AI
             AggroEntity(source);
         }
 
+        private static HashSet<uint> spellPositionalUnits;
+
+        private bool IsSpellPositionalUnit(IUnitEntity unit)
+        {
+            spellPositionalUnits ??= gameTableManager.Spell4Base.Entries
+                .Select(e => e.Creature2IdPositionalAoe)
+                .Where(id => id != 0u)
+                .ToHashSet();
+            return spellPositionalUnits.Contains(unit.CreatureId);
+        }
+
         private void AggroEntity(IGridEntity source)
         {
             if (!entity.IsAlive)
@@ -560,6 +576,11 @@ namespace NexusForever.Script.Main.AI
                 return;
 
             if (entity.GetDispositionTo(unit.Faction1) != Disposition.Hostile)
+                return;
+
+            // the invisible units that anchor spells at a position are hostile to everyone, never something to fight (the
+            // alarm's team went for one first, Teun 7 Oct 2026)
+            if (IsSpellPositionalUnit(unit))
                 return;
 
             var spellParameters = spellParametersFactory.Resolve();
