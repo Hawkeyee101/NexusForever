@@ -889,7 +889,17 @@ namespace NexusForever.Game.Entity
             base.AddVisible(entity);
 
             if (entity is IWorldEntity worldEntity)
+            {
                 Session.EnqueueMessageEncrypted(worldEntity.BuildCreatePacket(IsLoading));
+
+                // a blocked object shows as in use, so the client doesn't offer it
+                if (worldEntity.InteractionBlocked && worldEntity.HasActivateSpell)
+                    Session.EnqueueMessageEncrypted(new ServerEntityInteractiveUpdate
+                    {
+                        UnitId = worldEntity.Guid,
+                        InUse  = true
+                    });
+            }
 
             if (entity is IPlayer playerEntity)
                 Session.EnqueueMessageEncrypted(new ServerSetUnitPathType
@@ -1465,6 +1475,11 @@ namespace NexusForever.Game.Entity
         {
             if (node == null)
                 return null;
+
+            // a temporary reputation (e.g. a disguise) counts over the real one
+            float? reputationOverride = ReputationManager.GetOverride(node.FactionId);
+            if (reputationOverride.HasValue)
+                return FactionNode.GetDisposition(FactionNode.GetFactionLevel(reputationOverride.Value));
 
             // check if current node has required reputation
             IReputation reputation = ReputationManager.GetReputation(node.FactionId);

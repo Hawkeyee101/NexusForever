@@ -26,10 +26,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
     /// volume (5725), the mission's last objective, so the regroup is the tavern (<see cref="HycrestMissions.EndsAtHideout"/>).
     /// Vesna's lines in video order: setup 444091 (with the vote outcome, main event), 454818 (Y, 4 s later), 162923 near the
     /// headquarters, 466528 (B, 10 s later), 465442 once the codes are taken.
-    /// Inferred: the escort of two, the wave make-up (leader + two each, B), when the waves come (the agent's death or 25 s
-    /// into the fight, whichever is first; B shows them after his death, Y a call about 23 s in), the codes appearing where
-    /// the agent fell once the fight is over (Y's drop, MMORPG-Life's box), the approach range for 162923, and the payoff
-    /// 444066 in the tavern (seen in neither video).
+    /// Teun's video check (9 Oct 2026): the agent says 162927 when nearly down; two Recovery Agents come after his death,
+    /// three more once those are down; the agent stands alone; the codes' crate stands there from the start and only opens
+    /// once the fight is over; the payoff 444066 comes in the tavern. Inferred: which of the waves' agents are leaders and
+    /// the approach range for 162923.
     /// </remarks>
     [ScriptFilterOwnerId(424u)]
     public class TheKeymasterMissionScript : HycrestMissionScript
@@ -51,6 +51,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const uint VesnaGetOut     = 465442u; // communicator: "Good work. Now get out of there before anyone else shows up."
         private const uint VesnaPayoff     = 444066u; // communicator: "With these codes, we can destroy those pesky watchtowers..."
 
+        // the agent's line when he is nearly down (retail video, Teun 9 Oct 2026); in no table, so a script line
+        private const uint AgentNearlyDown = 162927u; // "No! This can't be happening!"
+        private const float NearlyDownHealth = 0.15f;
+
         // Y: the hint 4 s after the setup; B: the crowds line 10 s after the signal
         private static readonly TimeSpan HintDelay   = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan CrowdsDelay = TimeSpan.FromSeconds(10);
@@ -66,7 +70,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private const float PullRange = 45f;
 
         // the waves: in at the foot of the headquarters' stairs (Y: "reinforcements run down the stairs"; points on the
-        // yard's floor, surface.py), leader first. B: wave 2 right after the agent's death, wave 3 later
+        // yard's floor, surface.py), leader first. Teun's video check (9 Oct 2026): two come once the agent is dead, three
+        // more once those are down; the leaders (action text 820) are the ones with enter combat barks
         private static readonly Vector3[] WaveSpawns =
         [
             new(-2390f, -868.242f, -1966f),
@@ -75,20 +80,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         ];
         private static readonly uint[][] Waves =
         [
-            [WaveOneLeader, WaveOneAgent, WaveOneAgent],
+            [WaveOneLeader, WaveOneAgent],
             [WaveTwoLeader, WaveTwoAgent, WaveTwoAgent]
         ];
-        private static readonly TimeSpan ReinforcementDelay = TimeSpan.FromSeconds(25);
         private static readonly TimeSpan NextWaveDelay = TimeSpan.FromSeconds(3);
 
-        // the codes: where the agent fell (Y), or the Jabbithole spot of the box (one sighting, on the yard in front of a
-        // crate; floor height a guess) if he fell somewhere odd
-        private static readonly Vector3 CodesSpot = new(-2398f, -868.242f, -1982f);
-        private const float CodesFromHeadquarters = 30f;
+        // the codes: on top of the crate stack that is part of the map, at the Jabbithole spot (one sighting, (-2400, -1990));
+        // measured standing on it (Teun, 9 Oct 2026). There from the start, locked until the fight is over
+        private static readonly Vector3 CodesSpot = new(-2400.62f, -866.38f, -1989.90f);
         private static readonly TimeSpan CodesRemoveDelay = TimeSpan.FromSeconds(1);
 
-        // Ayita's Tavern (40149, r4, the tavern floor; 24804 is the objective's own point by the door)
-        private static readonly Vector3 Tavern = new(-2475.78f, -877.59f, -1968.17f);
+        // Ayita's Tavern: 1971's own point 24804, inside the tavern about 10 m from the door (40149 was 1.7 m from it, so
+        // the party counted as inside in the doorway and the door closed in front of them, Teun 9 Oct 2026)
+        private static readonly Vector3 Tavern = new(-2478.88f, -877.79f, -1976.28f);
         private const uint TriggerId = 114910u;
         private const float TriggerRange = 4f;
 
@@ -99,6 +103,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         private IUnitEntity agent;
         private readonly List<IUnitEntity> enemies = [];
         private readonly HashSet<IUnitEntity> inCombat = [];
+        // spawned but not on the map yet (they arrive a tick later): a wave isn't down before it has even appeared
+        private readonly HashSet<IUnitEntity> arriving = [];
         private IWorldEntity codes;
         private IVolumeGridTriggerEntity trigger;
         private readonly Dictionary<uint, uint> tracked = [];   // guid -> objective, the units marked on the map
@@ -106,10 +112,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private bool signalSent;
         private bool fightStarted;
-        private double reinforcementTimer;
+        private bool nearlyDownSaid;
         private int wavesCalled;
         private bool waveQueued;
-        private Vector3? agentFell;
+        private bool codesOpen;
         private bool codesTaken;
         private bool ending;
 
@@ -146,6 +152,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             base.OnLoad(owner);
 
             actionQueue.Enqueue(HintDelay, () => Communicator(VesnaHint));
+            SpawnCodes();
             log.LogInformation("Hycrest: The Keymaster started.");
         }
 
@@ -174,6 +181,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private void AddEnemy(IUnitEntity unit)
         {
+            arriving.Remove(unit);
             if (!unit.InCombat)
                 unit.Sheathed = true;
             if (!enemies.Contains(unit))
@@ -217,7 +225,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
         private void UpdateFight(double lastTick)
         {
-            if (codes != null || codesTaken)
+            if (codesOpen || codesTaken)
                 return;
 
             List<IUnitEntity> alive = enemies.Where(e => e.InWorld && e.IsAlive).ToList();
@@ -238,23 +246,28 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
                     return;
 
                 fightStarted = true;
-                reinforcementTimer = ReinforcementDelay.TotalSeconds;
                 log.LogInformation("Hycrest: The Keymaster, the fight at the headquarters started.");
             }
 
             PullIn(alive);
 
-            // the first wave: the agent's death or the call some time into the fight; the next one once a wave is down
-            reinforcementTimer -= lastTick;
+            if (!nearlyDownSaid && agent is { InWorld: true, IsAlive: true } && agent.MaxHealth > 0u
+                && agent.Health <= agent.MaxHealth * NearlyDownHealth)
+            {
+                nearlyDownSaid = true;
+                dialogue.Bark(agent, AgentNearlyDown);
+            }
+
+            // the first wave once the agent is dead, the next one once a wave is down
             bool agentDown = agent == null || !agent.InWorld || !agent.IsAlive;
-            if (wavesCalled == 0 && (agentDown || reinforcementTimer <= 0d))
+            if (wavesCalled == 0 && agentDown)
                 CallWave();
-            else if (wavesCalled > 0 && wavesCalled < Waves.Length && !waveQueued && alive.All(e => e == agent))
+            else if (wavesCalled > 0 && wavesCalled < Waves.Length && !waveQueued && arriving.Count == 0 && alive.All(e => e == agent))
                 QueueWave();
 
-            // all of them down: the codes are there to take
-            if (agentDown && wavesCalled == Waves.Length && !waveQueued && alive.Count == 0)
-                SpawnCodes();
+            // all of them down: the codes can be taken
+            if (agentDown && wavesCalled == Waves.Length && !waveQueued && arriving.Count == 0 && alive.Count == 0)
+                OpenCodes();
         }
 
         /// <summary>
@@ -308,6 +321,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             entity.Initialise(creatureInfo);
             var direction = new Vector3(Headquarters.X - position.X, 0f, Headquarters.Z - position.Z);
             entity.Rotation = new Vector3(MathF.Atan2(-direction.X, -direction.Z), 0f, 0f);
+            arriving.Add(entity);
             entity.AddToMap(mapInstance, position);
             enemies.Add(entity);
         }
@@ -320,14 +334,19 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             if (creatureInfo == null)
                 return;
 
-            Vector3 position = agentFell is Vector3 fell && Vector3.Distance(fell, Headquarters) <= CodesFromHeadquarters
-                ? fell : CodesSpot;
-
             var entity = publicEvent.CreateEntity<INonPlayerEntity>();
             entity.Initialise(creatureInfo);
-            entity.AddToMap(mapInstance, position);
+            entity.InteractionBlocked = true;
+            entity.AddToMap(mapInstance, CodesSpot);
             codes = entity;
-            log.LogInformation("Hycrest: The Keymaster, the fight is over, the codes are there.");
+        }
+
+        private void OpenCodes()
+        {
+            codesOpen = true;
+            if (codes != null)
+                codes.InteractionBlocked = false;
+            log.LogInformation("Hycrest: The Keymaster, the fight is over, the codes can be taken.");
         }
 
         private void OnCodesTaken()
@@ -384,7 +403,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
 
             // the agent first, then whoever is left of the fight, then the codes
             List<IWorldEntity> marked = [];
-            if (codes is { InWorld: true })
+            if (codesOpen && codes is { InWorld: true })
                 marked.Add(codes);
             else if (agent is { InWorld: true, IsAlive: true })
                 marked.Add(agent);
@@ -439,7 +458,6 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             inCombat.Remove(unit);
             if (unit == agent)
             {
-                agentFell = unit.Position;
                 log.LogInformation("Hycrest: The Keymaster, the Field Intelligence Agent is dead.");
             }
         }
@@ -491,6 +509,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             base.OnHideoutClosed();
             enemies.Clear();
             inCombat.Clear();
+            arriving.Clear();
             agent   = null;
             codes   = null;
             trigger = null;

@@ -39,9 +39,32 @@ namespace NexusForever.Game.Entity
 
         /// <summary>
         /// While set, interacting with the entity doesn't count towards quest or public event objectives, e.g. a captive
-        /// that can only be freed once its guards are dead.
+        /// that can only be freed once its guards are dead, and an object with an activate spell can't be activated (the
+        /// client shows it as in use, like an occupied chair).
         /// </summary>
-        public bool InteractionBlocked { get; set; }
+        public bool InteractionBlocked
+        {
+            get => interactionBlocked;
+            set
+            {
+                if (interactionBlocked == value)
+                    return;
+
+                interactionBlocked = value;
+                if (InWorld && HasActivateSpell)
+                    EnqueueToVisible(new ServerEntityInteractiveUpdate
+                    {
+                        UnitId = Guid,
+                        InUse  = value
+                    });
+            }
+        }
+        private bool interactionBlocked;
+
+        /// <summary>
+        /// Whether the entity is activated with a spell (e.g. a crate or a door), as opposed to talked to.
+        /// </summary>
+        public bool HasActivateSpell => CreatureInfo?.Entry?.Spell4IdActivate.Any(s => s != 0u) == true;
 
         /// <summary>
         /// Facing in the world. On a platform the movement manager keeps it relative to the platform (as the client sends
@@ -590,6 +613,10 @@ namespace NexusForever.Game.Entity
         /// </summary>
         public virtual void OnActivateCast(IPlayer activator, uint interactionId)
         {
+            // a script can hold an object back until its moment (e.g. a crate that only opens once its guards are down)
+            if (InteractionBlocked)
+                return;
+
             // Handle CSI
             uint spell4Id = 0;
             for (int i = 0; i < CreatureInfo.Entry.Spell4IdActivate.Length; i++)

@@ -32,7 +32,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         private static readonly Dictionary<uint, Vector3> InsideTriggerPositions = new()
         {
             [HycrestMissions.RegroupAbandonedBarn] = new(-2525.34f, -925.82f, -1190.13f),
-            [HycrestMissions.RegroupSinnatusBarn]  = new(-2391.63f, -926.28f, -1527.55f)
+            [HycrestMissions.RegroupSinnatusBarn]  = new(-2391.63f, -926.28f, -1527.55f),
+            [HycrestMissions.RegroupAyitasTavern]  = new(-2478.88f, -877.79f, -1976.28f)  // 24804, ~10 m inside the door
         };
 
         private IPublicEvent publicEvent;

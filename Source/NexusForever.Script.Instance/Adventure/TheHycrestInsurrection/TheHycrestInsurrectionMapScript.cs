@@ -28,6 +28,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         // a teleport within the map removes and re-adds the player, the arrival only plays on the first add
         private readonly HashSet<ulong> arrivedCharacters = [];
 
+        // Hide in Crowds in Hycrest City
+        private HycrestCrowds crowds;
+
         #region Dependency Injection
 
         private readonly IFactory<ISpellParameters> spellParametersFactory;
@@ -46,6 +49,9 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public override void OnAddToMap(IGridEntity entity)
         {
             base.OnAddToMap(entity);
+
+            crowds ??= new HycrestCrowds(map, spellParametersFactory);
+            crowds.OnAddToMap(entity);
 
             if (entity is not IPlayer player)
                 return;
@@ -111,6 +117,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         public void Update(double lastTick)
         {
             arrivalQueue.Update(lastTick);
+            crowds?.Update(lastTick);
 
             // public event scripts don't receive ticks from the engine, forward them so event scripts can run timers
             foreach (IPublicEvent publicEvent in map.PublicEventManager.GetEvents().ToList())

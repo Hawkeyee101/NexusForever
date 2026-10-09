@@ -14,6 +14,7 @@ namespace NexusForever.Game.Reputation
     {
         private readonly IPlayer owner;
         private readonly Dictionary<Faction, IReputation> reputations = new();
+        private readonly Dictionary<Faction, float> overrides = [];
 
         /// <summary>
         /// Create a new <see cref="IReputationManager"/> from existing <see cref="CharacterModel"/> database model.
@@ -64,6 +65,44 @@ namespace NexusForever.Game.Reputation
                 FactionId = factionId,
                 Value     = value
             });
+        }
+
+        /// <summary>
+        /// Temporarily treat the reputation with <see cref="Faction"/> as <paramref name="value"/> (e.g. a disguise), without
+        /// changing or saving the real reputation.
+        /// </summary>
+        public void AddOverride(Faction factionId, float value)
+        {
+            overrides[factionId] = value;
+            owner.Session.EnqueueMessageEncrypted(new ServerReputationOverrideAdd
+            {
+                UnitId    = owner.Guid,
+                FactionId = factionId,
+                Value     = value
+            });
+        }
+
+        /// <summary>
+        /// Remove the temporary reputation with <see cref="Faction"/>, see <see cref="AddOverride"/>.
+        /// </summary>
+        public void RemoveOverride(Faction factionId)
+        {
+            if (!overrides.Remove(factionId))
+                return;
+
+            owner.Session.EnqueueMessageEncrypted(new ServerReputationOverrideRemove
+            {
+                UnitId    = owner.Guid,
+                FactionId = factionId
+            });
+        }
+
+        /// <summary>
+        /// The temporary reputation with <see cref="Faction"/>, if one is set (see <see cref="AddOverride"/>).
+        /// </summary>
+        public float? GetOverride(Faction factionId)
+        {
+            return overrides.TryGetValue(factionId, out float value) ? value : null;
         }
 
         /// <summary>

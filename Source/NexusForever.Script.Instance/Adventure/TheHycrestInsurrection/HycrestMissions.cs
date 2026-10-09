@@ -129,7 +129,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
             [424u] = RegroupAyitasTavern,
             [425u] = RegroupArcwulffFarm,
             [426u] = RegroupArcwulffFarm, // retail video: "Meet us at the nearby safehouse" (Vesna, 461016)
-            [427u] = RegroupAbandonedBarn,
+            [427u] = RegroupAyitasTavern,  // retail videos B and Y: back over the wooden bridge into Ayita's Tavern
             [428u] = RegroupAbandonedBarn,
             [429u] = RegroupBellFarmhouse  // Clearance: "Meet with Ayita Sinnatus in the nearby farmhouse" (objective 2167)
         };

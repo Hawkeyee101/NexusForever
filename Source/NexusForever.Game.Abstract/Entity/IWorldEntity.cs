@@ -22,9 +22,15 @@ namespace NexusForever.Game.Abstract.Entity
 
         /// <summary>
         /// While set, interacting with the entity doesn't count towards quest or public event objectives, e.g. a captive
-        /// that can only be freed once its guards are dead.
+        /// that can only be freed once its guards are dead, and an object with an activate spell can't be activated (shown
+        /// as in use).
         /// </summary>
         bool InteractionBlocked { get; set; }
+
+        /// <summary>
+        /// Whether the entity is activated with a spell (e.g. a crate or a door), as opposed to talked to.
+        /// </summary>
+        bool HasActivateSpell { get; }
         Vector3 Rotation { get; set; }
         public WorldZoneEntry Zone { get; }
 

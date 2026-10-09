@@ -13,6 +13,7 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection
         TheCaretaker      = 53309,
         CaretakerHologram = 56685,
         BarnDoor          = 51064,
-        FarmhouseDoor     = 51065
+        FarmhouseDoor     = 51065,
+        TavernDoor        = 51062
     }
 }

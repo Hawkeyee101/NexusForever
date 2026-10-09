@@ -575,7 +575,12 @@ namespace NexusForever.Script.Main.AI
             if (source is not IUnitEntity unit)
                 return;
 
-            if (entity.GetDispositionTo(unit.Faction1) != Disposition.Hostile)
+            // a player's reputation counts both ways (e.g. a disguise's Beloved standing with the Hycrest Watch keeps the
+            // guards calm), the creature's own faction relationships only know factions
+            Disposition disposition = unit is IPlayer player
+                ? player.GetDispositionTo(entity.Faction1)
+                : entity.GetDispositionTo(unit.Faction1);
+            if (disposition != Disposition.Hostile)
                 return;
 
             // the invisible units that anchor spells at a position are hostile to everyone, never something to fight (the

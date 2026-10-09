@@ -67,8 +67,9 @@ namespace NexusForever.Game.Entity.Creature
                 CreatureId      = creatureId,
                 Spell4Id        = spell4Id,
                 Flags           = CreatureSpellFlags.ScriptHandled,
-                InitialDelayMin = Milliseconds(first - FirstJitter),
-                InitialDelayMax = Milliseconds(first + FirstJitter),
+                // first 0: at once on aggro, before any auto attack (no spread)
+                InitialDelayMin = first <= 0d ? 0u : Milliseconds(first - FirstJitter),
+                InitialDelayMax = first <= 0d ? 0u : Milliseconds(first + FirstJitter),
                 MaxRange        = range,
                 Target          = CreatureSpellTarget.Victim,
                 Priority        = priority,
@@ -103,6 +104,10 @@ namespace NexusForever.Game.Entity.Creature
         private const uint RecoveryLeaderWaveOne      = 19130u;
         private const uint RecoveryAgentWaveTwo       = 50676u;
         private const uint RecoveryLeaderWaveTwo      = 50677u;
+        private const uint HycrestWatchman            = 17929u;
+        private const uint ShatterforceTrooper        = 17745u;
+        private const uint ShatterforceEnforcer       = 18465u;
+        private const uint DominionCommando           = 17804u;
         private const uint DominionRocketeer          = 48255u;
         private const uint DominionGuardbot           = 49118u;
         private const uint ArsenaxAmbush              = 48373u;
@@ -113,6 +118,7 @@ namespace NexusForever.Game.Entity.Creature
         private const uint ShellStorm      = 66281u;
         private const uint Longshot        = 66282u;
         private const uint MortarBarrage   = 66283u;
+        private const uint CommandoMortar  = 69344u;   // the Commando's Mortar Barrage (range 60, telegraph 7107)
         private const uint Snipe           = 27324u;
         private const uint CallReinforcements = 48499u;
         private const uint Slice           = 65715u;
@@ -188,7 +194,7 @@ namespace NexusForever.Game.Entity.Creature
             // can't summon the flare, drill and Rapid Response Team); once per fight
             AutoAttack(ReconSpecialist, Blast, "Blast"),
             AutoAttack(ReconSpecialist, Shot, "Shot"),
-            ScriptHandledOnce(ReconSpecialist, CallReinforcements, first: 1d, range: 40f, 0, "Call Reinforcements (the alarm, on engaging: Teun, 5 Oct 2026)"),
+            ScriptHandledOnce(ReconSpecialist, CallReinforcements, first: 0d, range: 40f, 0, "Call Reinforcements (the alarm, at once on aggro, before any attack: Teun, 7 Oct 2026)"),
             Special(ReconSpecialist, PrecisionBlast, first: 6d, every: 12d, range: 26f, CreatureSpellTarget.Victim, 1, "Precision Blast"),
             Special(ReconSpecialist, WildBarrage, first: 10d, every: 15d, range: 25f, CreatureSpellTarget.VictimPosition, 0, "Wild Barrage"),
 
@@ -254,6 +260,26 @@ namespace NexusForever.Game.Entity.Creature
             AutoAttack(RecoveryAgentWaveTwo, Shot, "Shot"),
             Special(RecoveryAgentWaveTwo, PrecisionBlast, first: 6d, every: 12d, range: 26f, CreatureSpellTarget.Victim, 1, "Precision Blast"),
             Special(RecoveryAgentWaveTwo, WildBarrage, first: 10d, every: 15d, range: 25f, CreatureSpellTarget.VictimPosition, 0, "Wild Barrage"),
+
+            // Hycrest City's watch (Jabbithole kits; timings like the agents', not measured)
+            // Hycrest Watchman: pistols, Precision Blast, Wild Barrage
+            AutoAttack(HycrestWatchman, Blast, "Blast"),
+            AutoAttack(HycrestWatchman, Shot, "Shot"),
+            Special(HycrestWatchman, PrecisionBlast, first: 6d, every: 12d, range: 26f, CreatureSpellTarget.Victim, 1, "Precision Blast"),
+            Special(HycrestWatchman, WildBarrage, first: 10d, every: 15d, range: 25f, CreatureSpellTarget.VictimPosition, 0, "Wild Barrage"),
+            // Shatterforce Trooper and Enforcer (Elite Enforcer / Officer pages): Slice, Slash, Triple Threat, Demolition Shout
+            AutoAttack(ShatterforceTrooper, GatekeeperSlice, "Slice"),
+            AutoAttack(ShatterforceTrooper, GatekeeperSlash, "Slash"),
+            Special(ShatterforceTrooper, TripleThreat, first: 6d, every: 12d, range: 5f, CreatureSpellTarget.Victim, 1, "Triple Threat"),
+            Special(ShatterforceTrooper, DemolitionShout, first: 10d, every: 20d, range: 6f, CreatureSpellTarget.Victim, 0, "Demolition Shout"),
+            AutoAttack(ShatterforceEnforcer, GatekeeperSlice, "Slice"),
+            AutoAttack(ShatterforceEnforcer, GatekeeperSlash, "Slash"),
+            Special(ShatterforceEnforcer, TripleThreat, first: 6d, every: 12d, range: 5f, CreatureSpellTarget.Victim, 1, "Triple Threat"),
+            Special(ShatterforceEnforcer, DemolitionShout, first: 10d, every: 20d, range: 6f, CreatureSpellTarget.Victim, 0, "Demolition Shout"),
+            // Dominion Commando: Plasma Shot, Shell Storm, Mortar Barrage 69344
+            AutoAttack(DominionCommando, PlasmaShot, "Plasma Shot"),
+            Special(DominionCommando, ShellStorm, first: 6d, every: 12d, range: 15f, CreatureSpellTarget.Victim, 1, "Shell Storm"),
+            Special(DominionCommando, CommandoMortar, first: 8d, every: 20d, range: 30f, CreatureSpellTarget.VictimPosition, 0, "Mortar Barrage"),
 
             // Dominion Rocketeer (Jailbreak's drop-ins on the blimp): pistols, Precision Blast, Wild Barrage (Jabbithole)
             AutoAttack(DominionRocketeer, Blast, "Blast"),
