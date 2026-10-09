@@ -72,11 +72,21 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
         // the waves: in at the foot of the headquarters' stairs (Y: "reinforcements run down the stairs"; points on the
         // yard's floor, surface.py), leader first. Teun's video check (9 Oct 2026): two come once the agent is dead, three
         // more once those are down; the leaders (action text 820) are the ones with enter combat barks
-        private static readonly Vector3[] WaveSpawns =
+        // wave 2 comes from the south-east of the headquarters (Teun's spot from the retail video, 9 Oct 2026, !entity info;
+        // the second Jabbithole cluster of agent sightings, (-2381, -2000)), leader first, the others 2.5 m to either side
+        // across their way to the headquarters
+        private static readonly Vector3[][] WaveSpawns =
         [
-            new(-2390f, -868.242f, -1966f),
-            new(-2386f, -868.242f, -1966f),
-            new(-2394f, -868.242f, -1966f)
+            [
+                new(-2390f, -868.242f, -1966f),
+                new(-2386f, -868.242f, -1966f),
+                new(-2394f, -868.242f, -1966f)
+            ],
+            [
+                new(-2380.93f, -868.52f, -2000.75f),
+                new(-2379.83f, -868.52f, -1998.51f),
+                new(-2382.04f, -868.52f, -2002.99f)
+            ]
         ];
         private static readonly uint[][] Waves =
         [
@@ -304,9 +314,10 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             if (publicEvent.HasFinished || wavesCalled >= Waves.Length)
                 return;
 
+            Vector3[] spawns = WaveSpawns[wavesCalled];
             uint[] wave = Waves[wavesCalled++];
             for (int i = 0; i < wave.Length; i++)
-                SpawnEnemy(wave[i], WaveSpawns[i % WaveSpawns.Length]);
+                SpawnEnemy(wave[i], spawns[i % spawns.Length]);
 
             log.LogInformation($"Hycrest: The Keymaster, wave {wavesCalled} of {Waves.Length} called.");
         }
@@ -324,6 +335,8 @@ namespace NexusForever.Script.Instance.Adventure.TheHycrestInsurrection.Mission
             arriving.Add(entity);
             entity.AddToMap(mapInstance, position);
             enemies.Add(entity);
+
+            log.LogDebug($"Hycrest: The Keymaster, {creatureId} spawned at {position}.");
         }
 
         // --- the codes --------------------------------------------------------------------------------------------------
